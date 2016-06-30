@@ -32,7 +32,7 @@ func SplitSendMessage(s *discordgo.Session, channelID, message string) ([]*disco
 	return ret, nil
 }
 
-// Will split "s" before runecount at last possible newline, whitespace or just at runecount if there is no whitespace
+// Will split "s" before runecount at last possible newline, whitespace or just at "runecount" if there is no whitespace
 // If the runecount in "s" is less than "runeCount" then "last" will be zero
 func StrSplit(s string, runeCount int) (split, rest string) {
 	// Possibly split up message
@@ -74,11 +74,11 @@ func StrSplit(s string, runeCount int) (split, rest string) {
 }
 
 // Returns the string index from the rune position
-// Panics if utf8.RuneCountInString(s) <= runeIndex
+// Panics if utf8.RuneCountInString(s) <= runeIndex or runePos < 0
 func RuneByIndex(s string, runePos int) (rune, int) {
 	sLen := utf8.RuneCountInString(s)
-	if sLen <= runePos {
-		panic("runePos is less than the runecount")
+	if sLen <= runePos || runePos < 0 {
+		panic("runePos is out of bounds")
 	}
 
 	i := 0
