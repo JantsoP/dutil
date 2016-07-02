@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-func TestSplitSendMessage(t *testing.T) {
-
-}
-
 type StrSplitTestCase struct {
 	Str      string
 	ExpFirst string
@@ -33,4 +29,21 @@ func TestSplitStr(t *testing.T) {
 		assert.Equal(t, c.ExpFirst, first, "case #%d", k)
 		assert.Equal(t, c.ExpRest, last, "case #%d", k)
 	}
+}
+
+func TestSplitSendMessage(t *testing.T) {
+	if !RequireTestingChannel(t) {
+		return
+	}
+
+	msg := ""
+	for i := 0; i < 400; i++ {
+		msg += "TesMessage"
+	}
+
+	msgs, err := SplitSendMessage(dgo, envChannel, msg)
+	if !assert.NoError(t, err, "Error sending messages") {
+		return
+	}
+	assert.Len(t, msgs, 2, "Expected length is 2")
 }

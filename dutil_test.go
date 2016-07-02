@@ -3,10 +3,11 @@ package dutil
 import (
 	"github.com/bwmarrin/discordgo"
 	"os"
+	"testing"
 )
 
 var (
-	dg *discordgo.Session // Stores global discordgo session
+	dgo *discordgo.Session // Stores global discordgo session
 
 	envToken   = os.Getenv("DG_TOKEN")   // Token to use when authenticating
 	envChannel = os.Getenv("DG_CHANNEL") // Channel ID to use for tests
@@ -18,6 +19,28 @@ func init() {
 	}
 
 	if d, err := discordgo.New(envToken); err == nil {
-		dg = d
+		dgo = d
 	}
+}
+
+func RequireSession(t *testing.T) bool {
+	if dgo == nil || dgo.Token == "" {
+		t.Skip("Not logged into discord, skipping...")
+		return false
+	}
+
+	return true
+}
+
+func RequireTestingChannel(t *testing.T) bool {
+	if !RequireSession(t) {
+		return false
+	}
+
+	if envChannel == "" {
+		t.Skip("No testing channel specified, skipping...")
+		return false
+	}
+
+	return true
 }
