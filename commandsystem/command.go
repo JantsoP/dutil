@@ -10,16 +10,18 @@ import (
 
 // A single command definition
 type CommandDef struct {
-	Name    string
-	Aliases []string
-
+	Name        string   // Name of command, what its called from
+	Aliases     []string // Aliases which it can also be called from
 	Description string
 
-	RequiredArgs int
+	HideFromHelp            bool // Hide it from help
+	IgnoreUserNotFoundError bool // Instead of throwing a User not found error, it will ignore it if it's not a requireed argument
+	RunInDm                 bool // Run in dms, users can't be provided as arguments then
+
+	RequiredArgs int // Number of reuquired argument
 	Arguments    []*ArgumentDef
 
-	RunFunc      func(cmd *ParsedCommand, m *discordgo.MessageCreate)
-	HideFromHelp bool
+	RunFunc func(cmd *ParsedCommand, m *discordgo.MessageCreate)
 }
 
 func (c *CommandDef) String() string {
@@ -120,6 +122,11 @@ func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCre
 		}, nil
 	}
 
+	channel, err := s.State.Channel(m.ChannelID)
+	if err != nil {
+		return nil, err
+	}
+
 	parsedArgs := make([]*ParsedArgument, len(target.Arguments))
 
 	// Filter out command from string
@@ -137,7 +144,13 @@ func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCre
 		case ArgumentTypeString:
 			val, next, err = ParseString(buf[curIndex:])
 		case ArgumentTypeUser:
+			if channel.IsPrivate {
+				break
+			}
 			val, next, err = ParseUser(buf[curIndex:], m.Message, s)
+			if err == ErrDiscordUserNotFound && target.IgnoreUserNotFoundError {
+				err = nil
+			}
 		}
 		raw := buf[curIndex : curIndex+next]
 
