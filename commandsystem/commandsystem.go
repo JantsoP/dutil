@@ -43,16 +43,25 @@ func (cs *CommandSystem) HandleMessageCreate(s *discordgo.Session, m *discordgo.
 		return // Can't handle message if we don't know our id
 	}
 
-	commandStr := ""
+	channel, err := s.State.Channel(m.ChannelID)
+	if err != nil {
+		log.Println("Failed getting channel from state:", err)
+		return // Need channel to function
+	}
 
+	commandStr := ""
 	// Check for mention
-	id := s.State.User.ID
-	if strings.Index(m.Content, "<@"+id+">") == 0 {
-		commandStr = strings.Replace(m.Content, "<@"+id+">", "", 1)
-	} else if strings.Index(m.Content, "<@!"+id+">") == 0 {
-		commandStr = strings.Replace(m.Content, "<@!"+id+">", "", 1)
+	if channel.IsPrivate {
+		commandStr = m.Content
 	} else {
-		return
+		id := s.State.User.ID
+		if strings.Index(m.Content, "<@"+id+">") == 0 {
+			commandStr = strings.Replace(m.Content, "<@"+id+">", "", 1)
+		} else if strings.Index(m.Content, "<@!"+id+">") == 0 {
+			commandStr = strings.Replace(m.Content, "<@!"+id+">", "", 1)
+		} else {
+			return
+		}
 	}
 
 	commandStr = strings.TrimSpace(commandStr)

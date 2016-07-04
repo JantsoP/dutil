@@ -134,6 +134,7 @@ func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCre
 	buf = strings.TrimSpace(buf)
 	curIndex := 0
 
+OUTER:
 	for k, v := range target.Arguments {
 		var val interface{}
 		var next int
@@ -145,12 +146,9 @@ func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCre
 			val, next, err = ParseString(buf[curIndex:])
 		case ArgumentTypeUser:
 			if channel.IsPrivate {
-				break
+				break OUTER
 			}
 			val, next, err = ParseUser(buf[curIndex:], m.Message, s)
-			if err == ErrDiscordUserNotFound && target.IgnoreUserNotFoundError {
-				err = nil
-			}
 		}
 		raw := buf[curIndex : curIndex+next]
 
@@ -162,7 +160,11 @@ func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCre
 			Parsed: val,
 		}
 		if err != nil {
-			return nil, err
+			if err == ErrDiscordUserNotFound && target.IgnoreUserNotFoundError {
+				parsedArgs[k] = nil
+			} else {
+				return nil, err
+			}
 		}
 		if curIndex >= len(buf) {
 			if k < target.RequiredArgs {
