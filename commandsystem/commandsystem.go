@@ -60,7 +60,7 @@ func (cs *CommandSystem) HandleMessageCreate(s *discordgo.Session, m *discordgo.
 	// Check if any additional fields were provided to the command, if not just run the default command if possible
 	fields := strings.Fields(commandStr)
 	if len(fields) < 1 {
-		if cs.DefaultMentionHandler != nil && cs.DefaultMentionHandler.RequiredArgs == 0 {
+		if cs.DefaultMentionHandler != nil && cs.DefaultMentionHandler.RequiredArgs == 0 && cs.DefaultMentionHandler.RunFunc != nil {
 			cs.DefaultMentionHandler.RunFunc(&ParsedCommand{Args: make([]*ParsedArgument, len(cs.DefaultMentionHandler.Arguments))}, m)
 		}
 		return
