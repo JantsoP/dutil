@@ -122,9 +122,10 @@ func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCre
 
 	parsedArgs := make([]*ParsedArgument, len(target.Arguments))
 
-	buf := commandStr
-	curIndex := findNextSpace(buf) // Omit command name
-	curIndex += TrimSpaces(buf[curIndex:])
+	// Filter out command from string
+	buf := strings.Replace(commandStr, target.Name, "", 1)
+	buf = strings.TrimSpace(buf)
+	curIndex := 0
 
 	for k, v := range target.Arguments {
 		var val interface{}

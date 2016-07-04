@@ -21,6 +21,10 @@ func (cs *CommandSystem) RegisterCommands(cmds ...*CommandDef) {
 }
 
 func (cs *CommandSystem) HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.Author != nil && m.Author.Bot {
+		return // Ignore bots
+	}
+
 	// Catch panics so that panics in command handlers does not stop the bot
 	defer func() {
 		if r := recover(); r != nil {
@@ -99,4 +103,18 @@ func (cs *CommandSystem) HandleMessageCreate(s *discordgo.Session, m *discordgo.
 			cs.DefaultMentionHandler.RunFunc(parsed, m)
 		}
 	}
+}
+
+func (cs *CommandSystem) GenerateHelp(byCmd string) string {
+	out := ""
+	for _, cmd := range cs.Commands {
+		if cmd.HideFromHelp {
+			continue
+		}
+
+		if byCmd == "" || byCmd == cmd.Name {
+			out += " - " + cmd.String() + "\n"
+		}
+	}
+	return out
 }
