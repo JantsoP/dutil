@@ -8,8 +8,16 @@ import (
 	"strings"
 )
 
+type CommandHandlerFunc func(raw string, m *discordgo.MessageCreate, s *discordgo.Session)
+
+type CommandHandler interface {
+	CheckMatch(raw string, m *discordgo.MessageCreate, s *discordgo.Session) bool
+	HandleCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) error
+	GenerateHelp(target string, depth int) string // Generates help
+}
+
 // A single command definition
-type CommandDef struct {
+type SimpleCommand struct {
 	Name        string   // Name of command, what its called from
 	Aliases     []string // Aliases which it can also be called from
 	Description string
@@ -18,17 +26,27 @@ type CommandDef struct {
 	IgnoreUserNotFoundError bool // Instead of throwing a User not found error, it will ignore it if it's not a requireed argument
 	RunInDm                 bool // Run in dms, users can't be provided as arguments then
 
-	RequiredArgs int // Number of reuquired argument
+	RequiredArgs int // Number of reuquired arguments
 	Arguments    []*ArgumentDef
 
-	RunFunc func(cmd *ParsedCommand, m *discordgo.MessageCreate)
+	RunFunc func(cmd *ParsedCommand, m *discordgo.MessageCreate) error
 }
 
-func (c *CommandDef) String() string {
+func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
+	if target != "" {
+		if !sc.CheckMatch(target, nil, nil) {
+			return ""
+		}
+	}
+
+	if sc.HideFromHelp {
+		return ""
+	}
+
 	aliasesString := ""
 
-	if len(c.Aliases) > 0 {
-		for k, v := range c.Aliases {
+	if len(sc.Aliases) > 0 {
+		for k, v := range sc.Aliases {
 			if k != 0 {
 				aliasesString += "/"
 			}
@@ -37,88 +55,76 @@ func (c *CommandDef) String() string {
 		aliasesString = "(" + aliasesString + ")"
 	}
 
-	out := fmt.Sprintf("**%s**%s: %s.", c.Name, aliasesString, c.Description)
-	if len(c.Arguments) > 0 {
-		for _, v := range c.Arguments {
-			out += fmt.Sprintf("\n     \\* %s - %s", v.String(), v.Description)
+	out := fmt.Sprintf(" - **%s**%s: %s.", sc.Name, aliasesString, sc.Description)
+	if len(sc.Arguments) > 0 {
+		for _, v := range sc.Arguments {
+			out += fmt.Sprintf("\n  \\* %s - %s", v.String(), v.Description)
 		}
 	}
 	return out
 }
 
-type ArgumentType int
-
-const (
-	ArgumentTypeString ArgumentType = iota
-	ArgumentTypeNumber
-	ArgumentTypeUser
-)
-
-func (a ArgumentType) String() string {
-	switch a {
-	case ArgumentTypeString:
-		return "String"
-	case ArgumentTypeNumber:
-		return "Number"
-	case ArgumentTypeUser:
-		return "@User"
+func (sc *SimpleCommand) CheckMatch(raw string, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+	fields := strings.SplitN(raw, " ", 2)
+	if len(fields) < 1 {
+		return false
 	}
-	return "???"
+
+	match := strings.EqualFold(fields[0], sc.Name)
+	if !match {
+		for _, v := range sc.Aliases {
+			if strings.EqualFold(fields[0], v) {
+				match = true
+				break
+			}
+		}
+	}
+
+	if !match {
+		return false
+	}
+
+	// We don't need channel info if it runs in all cases anyways
+	if sc.RunInDm {
+		return true
+	}
+
+	if s == nil {
+		return true
+	}
+
+	// Does not run in dm's so check if this is a dm
+	channel, err := s.State.Channel(m.ChannelID)
+	if err != nil {
+		return false
+	}
+
+	if !channel.IsPrivate {
+		return true
+	}
+
+	return false
 }
 
-type ArgumentDef struct {
-	Name        string
-	Description string
-	Type        ArgumentType
+func (sc *SimpleCommand) HandleCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) error {
+	parsed, err := sc.ParseCommand(raw, m, s)
+	if err != nil {
+		return err
+	}
+
+	if sc.RunFunc != nil {
+		return sc.RunFunc(parsed, m)
+	}
+
+	return nil
 }
 
-func (a *ArgumentDef) String() string {
-
-	return a.Name + ":" + a.Type.String() + ""
-}
-
-type ParsedArgument struct {
-	Raw    string
-	Parsed interface{}
-}
-
-func (p *ParsedArgument) Int() int {
-	val, _ := p.Parsed.(float64)
-	return int(val)
-}
-
-func (p *ParsedArgument) Str() string {
-	val, _ := p.Parsed.(string)
-	return val
-}
-
-func (p *ParsedArgument) Float() float64 {
-	val, _ := p.Parsed.(float64)
-	return val
-}
-
-func (p *ParsedArgument) DiscordUser() *discordgo.User {
-	val, _ := p.Parsed.(*discordgo.User)
-	return val
-}
-
-type ParsedCommand struct {
-	Name string
-	Cmd  *CommandDef
-	Args []*ParsedArgument
-}
-
-var (
-	ErrIncorrectNumArgs    = errors.New("Icorrect number of arguments")
-	ErrDiscordUserNotFound = errors.New("Discord user not found")
-)
-
-func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCreate, s *discordgo.Session) (*ParsedCommand, error) {
+func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) (*ParsedCommand, error) {
 	// No arguments passed
-	if len(target.Arguments) < 1 {
+	if len(sc.Arguments) < 1 {
 		return &ParsedCommand{
-			Name: target.Name,
-			Cmd:  target,
+			Name: sc.Name,
+			Cmd:  sc,
 		}, nil
 	}
 
@@ -127,15 +133,15 @@ func ParseCommand(commandStr string, target *CommandDef, m *discordgo.MessageCre
 		return nil, err
 	}
 
-	parsedArgs := make([]*ParsedArgument, len(target.Arguments))
+	parsedArgs := make([]*ParsedArgument, len(sc.Arguments))
 
 	// Filter out command from string
-	buf := strings.Replace(commandStr, target.Name, "", 1)
+	buf := raw[len(sc.Name):]
 	buf = strings.TrimSpace(buf)
 	curIndex := 0
 
 OUTER:
-	for k, v := range target.Arguments {
+	for k, v := range sc.Arguments {
 		var val interface{}
 		var next int
 		var err error
@@ -150,24 +156,24 @@ OUTER:
 			}
 			val, next, err = ParseUser(buf[curIndex:], m.Message, s)
 		}
-		raw := buf[curIndex : curIndex+next]
+		rawArg := buf[curIndex : curIndex+next]
 
 		curIndex += next
 		curIndex += TrimSpaces(buf[curIndex:])
 
 		parsedArgs[k] = &ParsedArgument{
-			Raw:    raw,
+			Raw:    rawArg,
 			Parsed: val,
 		}
 		if err != nil {
-			if err == ErrDiscordUserNotFound && target.IgnoreUserNotFoundError {
+			if err == ErrDiscordUserNotFound && sc.IgnoreUserNotFoundError {
 				parsedArgs[k] = nil
 			} else {
 				return nil, err
 			}
 		}
 		if curIndex >= len(buf) {
-			if k < target.RequiredArgs {
+			if k < sc.RequiredArgs {
 				return nil, ErrIncorrectNumArgs
 			}
 			break
@@ -175,8 +181,8 @@ OUTER:
 	}
 
 	return &ParsedCommand{
-		Name: target.Name,
-		Cmd:  target,
+		Name: sc.Name,
+		Cmd:  sc,
 		Args: parsedArgs,
 	}, nil
 }
@@ -273,3 +279,70 @@ func FindDiscordUser(str string, m *discordgo.Message, s *discordgo.Session) (*d
 
 	return nil, ErrDiscordUserNotFound
 }
+
+type ArgumentType int
+
+const (
+	ArgumentTypeString ArgumentType = iota
+	ArgumentTypeNumber
+	ArgumentTypeUser
+)
+
+func (a ArgumentType) String() string {
+	switch a {
+	case ArgumentTypeString:
+		return "String"
+	case ArgumentTypeNumber:
+		return "Number"
+	case ArgumentTypeUser:
+		return "@User"
+	}
+	return "???"
+}
+
+type ArgumentDef struct {
+	Name        string
+	Description string
+	Type        ArgumentType
+}
+
+func (a *ArgumentDef) String() string {
+
+	return a.Name + ":" + a.Type.String() + ""
+}
+
+type ParsedArgument struct {
+	Raw    string
+	Parsed interface{}
+}
+
+func (p *ParsedArgument) Int() int {
+	val, _ := p.Parsed.(float64)
+	return int(val)
+}
+
+func (p *ParsedArgument) Str() string {
+	val, _ := p.Parsed.(string)
+	return val
+}
+
+func (p *ParsedArgument) Float() float64 {
+	val, _ := p.Parsed.(float64)
+	return val
+}
+
+func (p *ParsedArgument) DiscordUser() *discordgo.User {
+	val, _ := p.Parsed.(*discordgo.User)
+	return val
+}
+
+type ParsedCommand struct {
+	Name string
+	Cmd  *SimpleCommand
+	Args []*ParsedArgument
+}
+
+var (
+	ErrIncorrectNumArgs    = errors.New("Icorrect number of arguments")
+	ErrDiscordUserNotFound = errors.New("Discord user not found")
+)

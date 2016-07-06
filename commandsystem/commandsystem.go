@@ -8,19 +8,19 @@ import (
 	"strings"
 )
 
-type CommandSystem struct {
-	Commands              []*CommandDef // Registered commands
-	DefaultMentionHandler *CommandDef   // Called when no other handler is found
+type System struct {
+	Commands       []CommandHandler // Registered commands
+	DefaultHandler CommandHandler   // Called when no other handler is found
 
 	SendStackOnPanic bool // Dumps the stack in a chat message when a panic happens in a command handler
 	Session          *discordgo.Session
 }
 
-func (cs *CommandSystem) RegisterCommands(cmds ...*CommandDef) {
+func (cs *System) RegisterCommands(cmds ...CommandHandler) {
 	cs.Commands = append(cs.Commands, cmds...)
 }
 
-func (cs *CommandSystem) HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author != nil && m.Author.Bot {
 		return // Ignore bots
 	}
@@ -55,9 +55,9 @@ func (cs *CommandSystem) HandleMessageCreate(s *discordgo.Session, m *discordgo.
 		commandStr = m.Content
 	} else {
 		id := s.State.User.ID
-		if strings.Index(m.Content, "<@"+id+">") == 0 {
+		if strings.Index(m.Content, "<@"+id+">") == 0 { // Normal mention
 			commandStr = strings.Replace(m.Content, "<@"+id+">", "", 1)
-		} else if strings.Index(m.Content, "<@!"+id+">") == 0 {
+		} else if strings.Index(m.Content, "<@!"+id+">") == 0 { // Nickname mention
 			commandStr = strings.Replace(m.Content, "<@!"+id+">", "", 1)
 		} else {
 			return
@@ -67,63 +67,44 @@ func (cs *CommandSystem) HandleMessageCreate(s *discordgo.Session, m *discordgo.
 	commandStr = strings.TrimSpace(commandStr)
 
 	// Check if any additional fields were provided to the command, if not just run the default command if possible
-	fields := strings.Fields(commandStr)
-	if len(fields) < 1 {
-		if cs.DefaultMentionHandler != nil && cs.DefaultMentionHandler.RequiredArgs == 0 && cs.DefaultMentionHandler.RunFunc != nil {
-			cs.DefaultMentionHandler.RunFunc(&ParsedCommand{Args: make([]*ParsedArgument, len(cs.DefaultMentionHandler.Arguments))}, m)
+	if commandStr == "" {
+		if cs.DefaultHandler != nil {
+			err := cs.DefaultHandler.HandleCommand(commandStr, m, s)
+			cs.CheckCommandError(err, m.ChannelID)
 		}
 		return
 	}
 
-	// Find a hadnler by name
-	cmdName := strings.ToLower(fields[0])
+	// Find a handler
 	for _, v := range cs.Commands {
-		match := v.Name == cmdName
-		if !match {
-			for _, alias := range v.Aliases {
-				if alias == cmdName {
-					match = true
-					break
-				}
-			}
-		}
-
-		if match {
-			parsed, err := ParseCommand(commandStr, v, m, s)
-			if err != nil {
-				dutil.SplitSendMessage(s, m.ChannelID, "Error parsing command: "+err.Error())
-				return
-			}
-			if v.RunFunc != nil {
-				v.RunFunc(parsed, m)
-			}
+		if v.CheckMatch(commandStr, m, s) {
+			err := v.HandleCommand(commandStr, m, s)
+			cs.CheckCommandError(err, m.ChannelID)
 			return
 		}
 	}
 
 	// No handler found, check the default one
-	if cs.DefaultMentionHandler != nil {
-		parsed, err := ParseCommand(commandStr, cs.DefaultMentionHandler, m, s)
-		if err != nil {
-			dutil.SplitSendMessage(s, m.ChannelID, "Error parsing command: "+err.Error())
-			return
-		}
-		if cs.DefaultMentionHandler.RunFunc != nil {
-			cs.DefaultMentionHandler.RunFunc(parsed, m)
-		}
+	if cs.DefaultHandler != nil {
+		err := cs.DefaultHandler.HandleCommand("", m, s)
+		cs.CheckCommandError(err, m.ChannelID)
 	}
 }
 
-func (cs *CommandSystem) GenerateHelp(byCmd string) string {
+func (cs *System) GenerateHelp(target string, depth int) string {
 	out := ""
 	for _, cmd := range cs.Commands {
-		if cmd.HideFromHelp {
-			continue
-		}
-
-		if byCmd == "" || byCmd == cmd.Name {
-			out += " - " + cmd.String() + "\n"
+		help := cmd.GenerateHelp(target, depth)
+		if help != "" {
+			out += help + "\n"
 		}
 	}
 	return out
+}
+
+func (cs *System) CheckCommandError(err error, channel string) {
+	if err != nil {
+		log.Println("Error handling command:", err)
+		dutil.SplitSendMessage(cs.Session, channel, "Error handling command: "+err.Error())
+	}
 }
