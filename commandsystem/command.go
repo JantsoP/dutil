@@ -202,7 +202,7 @@ OUTER:
 			}
 		}
 		if curIndex >= len(buf) {
-			if k < sc.RequiredArgs {
+			if k+1 < sc.RequiredArgs {
 				return nil, ErrIncorrectNumArgs
 			}
 			break
