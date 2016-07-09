@@ -34,6 +34,7 @@ func main() {
 	Addcommands(system)
 
 	dgo.AddHandler(system.HandleMessageCreate)
+	dgo.AddHandler(HandleMessageCreate)
 	dgo.AddHandler(HandleReady)
 	dgo.AddHandler(HandleServerJoin)
 
@@ -47,10 +48,21 @@ func main() {
 
 func HandleReady(s *discordgo.Session, r *discordgo.Ready) {
 	log.Println("Ready received! Connected to", len(s.State.Guilds), "Guilds")
+	log.Println(s.State.MaxMessageCount)
 }
 
 func HandleServerJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 	log.Println("Joined guild", g.Name, " Connected to", len(s.State.Guilds), "Guilds")
+}
+
+func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	log.Println(s.State.MaxMessageCount)
+	channel, err := s.State.Channel(m.ChannelID)
+	if err != nil {
+		log.Println("Err fetching channel from state", err)
+		return
+	}
+	log.Println(len(channel.Messages))
 }
 
 func Addcommands(system *commandsystem.System) {

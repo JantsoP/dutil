@@ -120,7 +120,7 @@ func (sc *SimpleCommand) HandleCommand(raw string, m *discordgo.MessageCreate, s
 }
 
 func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) (*ParsedCommand, error) {
-	// No arguments passed
+	// No arguments needed
 	if len(sc.Arguments) < 1 {
 		return &ParsedCommand{
 			Name: sc.Name,
@@ -135,10 +135,39 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 
 	parsedArgs := make([]*ParsedArgument, len(sc.Arguments))
 
-	// Filter out command from string
-	buf := raw[len(sc.Name):]
+	buf := ""
+	if sc.Name != "" {
+		split := strings.SplitN(raw, " ", 2)
+		if len(split) < 1 {
+			return nil, errors.New("Command not specified")
+		}
+
+		if split[0] == strings.ToLower(sc.Name) {
+			buf = raw[len(strings.ToLower(sc.Name)):]
+		} else {
+			for _, alias := range sc.Aliases {
+				if strings.ToLower(alias) == strings.ToLower(split[0]) {
+					buf = raw[len(strings.ToLower(alias)):]
+					break
+				}
+			}
+		}
+	}
+
 	buf = strings.TrimSpace(buf)
 	curIndex := 0
+
+	if buf == "" {
+		if sc.RequiredArgs == 0 {
+			return &ParsedCommand{
+				Name: sc.Name,
+				Cmd:  sc,
+				Args: parsedArgs,
+			}, nil
+		} else {
+			return nil, errors.New("Not enough argument provided, see help for more info")
+		}
+	}
 
 OUTER:
 	for k, v := range sc.Arguments {
