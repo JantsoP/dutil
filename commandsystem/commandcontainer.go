@@ -10,6 +10,7 @@ import (
 // Command container, you can nest these infinitely if you want
 type CommandContainer struct {
 	Name        string           // Name
+	Aliases     []string         // Aliases
 	Description string           // Description for this container
 	Children    []CommandHandler // Children
 
@@ -19,6 +20,12 @@ type CommandContainer struct {
 
 func (cc *CommandContainer) GenerateHelp(target string, depth int) string {
 	out := ""
+
+	aliasesStr := ""
+	if len(cc.Aliases) > 0 {
+		aliasesStr = " (" + strings.Join(cc.Aliases, ",") + ")"
+
+	}
 	if target != "" {
 		fields := strings.SplitN(target, " ", 2)
 		if strings.EqualFold(fields[0], cc.Name) {
@@ -33,7 +40,7 @@ func (cc *CommandContainer) GenerateHelp(target string, depth int) string {
 				}
 			} else {
 				// Show help for this container
-				out += fmt.Sprintf("**%s**: %s\n", cc.Name, cc.Description)
+				out += fmt.Sprintf("**%s**%s: %s\n", cc.Name, aliasesStr, cc.Description)
 				if len(cc.Children) > 0 {
 					for _, child := range cc.Children {
 						out += child.GenerateHelp("", 0) + "\n"
@@ -42,7 +49,7 @@ func (cc *CommandContainer) GenerateHelp(target string, depth int) string {
 			}
 		}
 	} else {
-		out += fmt.Sprintf(" - **%s**: %s", cc.Name, cc.Description)
+		out += fmt.Sprintf(" - **%s**(%s): %s", cc.Name, aliasesStr, cc.Description)
 		if depth > 0 && cc.Children != nil {
 			for _, child := range cc.Children {
 				out += "\n  - " + child.GenerateHelp("", depth-1)
@@ -57,6 +64,12 @@ func (cc *CommandContainer) CheckMatch(raw string, m *discordgo.MessageCreate, s
 	fields := strings.SplitN(raw, " ", 2)
 	if strings.EqualFold(fields[0], cc.Name) {
 		return true
+	}
+
+	for _, alias := range cc.Aliases {
+		if strings.EqualFold(fields[0], alias) {
+			return true
+		}
 	}
 
 	return false
