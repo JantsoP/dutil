@@ -49,10 +49,10 @@ func (cc *CommandContainer) GenerateHelp(target string, depth int) string {
 			}
 		}
 	} else {
-		out += fmt.Sprintf(" - **%s**(%s): %s", cc.Name, aliasesStr, cc.Description)
+		out += fmt.Sprintf("**%s** %s: %s", cc.Name, aliasesStr, cc.Description)
 		if depth > 0 && cc.Children != nil {
 			for _, child := range cc.Children {
-				out += "\n  - " + child.GenerateHelp("", depth-1)
+				out += "\n" + child.GenerateHelp("", depth-1)
 			}
 		}
 	}
