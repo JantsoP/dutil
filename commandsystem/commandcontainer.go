@@ -60,7 +60,7 @@ func (cc *CommandContainer) GenerateHelp(target string, depth int) string {
 	return out
 }
 
-func (cc *CommandContainer) CheckMatch(raw string, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (cc *CommandContainer) CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool {
 	fields := strings.SplitN(raw, " ", 2)
 	if strings.EqualFold(fields[0], cc.Name) {
 		return true
@@ -75,14 +75,14 @@ func (cc *CommandContainer) CheckMatch(raw string, m *discordgo.MessageCreate, s
 	return false
 }
 
-func (cc *CommandContainer) HandleCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) error {
+func (cc *CommandContainer) HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error {
 	split := strings.SplitN(raw, " ", 2)
 
 	found := false
 	if len(split) > 1 {
 		for _, v := range cc.Children {
-			if v.CheckMatch(split[1], m, s) {
-				v.HandleCommand(split[1], m, s)
+			if v.CheckMatch(split[1], source, m, s) {
+				v.HandleCommand(split[1], source, m, s)
 				found = true
 				break
 			}
@@ -90,14 +90,14 @@ func (cc *CommandContainer) HandleCommand(raw string, m *discordgo.MessageCreate
 
 		if !found {
 			if cc.NotFoundHandler != nil {
-				cc.NotFoundHandler.HandleCommand(split[1], m, s)
+				cc.NotFoundHandler.HandleCommand(split[1], source, m, s)
 			} else {
 				cc.SendUnknownHelp(m, s)
 			}
 		}
 	} else {
 		if cc.DefaultHandler != nil {
-			cc.DefaultHandler.HandleCommand("", m, s)
+			cc.DefaultHandler.HandleCommand("", source, m, s)
 		} else {
 			cc.SendUnknownHelp(m, s)
 		}

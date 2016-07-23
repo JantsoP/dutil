@@ -27,13 +27,10 @@ func main() {
 	}
 	dgo = session
 
-	system := &commandsystem.System{
-		Session: session,
-	}
+	system := commandsystem.NewSystem(session, ":)")
 
 	Addcommands(system)
 
-	dgo.AddHandler(system.HandleMessageCreate)
 	dgo.AddHandler(HandleMessageCreate)
 	dgo.AddHandler(HandleReady)
 	dgo.AddHandler(HandleServerJoin)

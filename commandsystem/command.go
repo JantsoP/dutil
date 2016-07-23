@@ -11,8 +11,8 @@ import (
 type CommandHandlerFunc func(raw string, m *discordgo.MessageCreate, s *discordgo.Session)
 
 type CommandHandler interface {
-	CheckMatch(raw string, m *discordgo.MessageCreate, s *discordgo.Session) bool
-	HandleCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) error
+	CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool
+	HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error
 	GenerateHelp(target string, depth int) string // Generates help
 }
 
@@ -24,17 +24,19 @@ type SimpleCommand struct {
 
 	HideFromHelp            bool // Hide it from help
 	IgnoreUserNotFoundError bool // Instead of throwing a User not found error, it will ignore it if it's not a requireed argument
-	RunInDm                 bool // Run in dms, users can't be provided as arguments then
+
+	RunInDm        bool // Run in dms, users can't be provided as arguments then
+	IgnoreMentions bool // Will not be triggered by mentions
 
 	RequiredArgs int // Number of reuquired arguments
 	Arguments    []*ArgumentDef
 
-	RunFunc func(cmd *ParsedCommand, m *discordgo.MessageCreate) error
+	RunFunc func(cmd *ParsedCommand, source CommandSource, m *discordgo.MessageCreate) error
 }
 
 func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
 	if target != "" {
-		if !sc.CheckMatch(target, nil, nil) {
+		if !sc.CheckMatch(target, CommandSourceHelp, nil, nil) {
 			return ""
 		}
 	}
@@ -64,7 +66,7 @@ func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
 	return out
 }
 
-func (sc *SimpleCommand) CheckMatch(raw string, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (sc *SimpleCommand) CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool {
 	fields := strings.SplitN(raw, " ", 2)
 	if len(fields) < 1 {
 		return false
@@ -84,41 +86,33 @@ func (sc *SimpleCommand) CheckMatch(raw string, m *discordgo.MessageCreate, s *d
 		return false
 	}
 
-	// We don't need channel info if it runs in all cases anyways
-	if sc.RunInDm {
-		return true
-	}
-
-	if s == nil {
-		return true
-	}
-
-	// Does not run in dm's so check if this is a dm
-	channel, err := s.State.Channel(m.ChannelID)
-	if err != nil {
+	// Check if this is a mention and ignore if so
+	if source == CommandSourceMention && sc.IgnoreMentions {
 		return false
 	}
 
-	if !channel.IsPrivate {
-		return true
+	// Same as above with dm's
+	if source == CommandSourceDM && !sc.RunInDm {
+		return false
 	}
 
 	return false
 }
 
-func (sc *SimpleCommand) HandleCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) error {
+func (sc *SimpleCommand) HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error {
 	parsed, err := sc.ParseCommand(raw, m, s)
 	if err != nil {
 		return err
 	}
 
 	if sc.RunFunc != nil {
-		return sc.RunFunc(parsed, m)
+		return sc.RunFunc(parsed, source, m)
 	}
 
 	return nil
 }
 
+// Parses a command into a ParsedCommand, where the slice length of the args is guaranteed to be the length of the toal amonut of arguments the command takes
 func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) (*ParsedCommand, error) {
 	// No arguments needed
 	if len(sc.Arguments) < 1 {
@@ -178,7 +172,7 @@ OUTER:
 		case ArgumentTypeNumber:
 			val, next, err = ParseNumber(buf[curIndex:])
 		case ArgumentTypeString:
-			val, next, err = ParseString(buf[curIndex:])
+			val, next, err = ParseString(buf[curIndex:], k == len(sc.Arguments)-1)
 		case ArgumentTypeUser:
 			if channel.IsPrivate {
 				break OUTER
@@ -258,7 +252,11 @@ func ParseUser(buf string, m *discordgo.Message, s *discordgo.Session) (user *di
 	return
 }
 
-func ParseString(buf string) (s string, index int, err error) {
+func ParseString(buf string, last bool) (s string, index int, err error) {
+	if last {
+		return buf, len(buf), nil
+	}
+
 	nextSpace := findNextSpace(buf)
 	index = nextSpace
 	s = buf[:nextSpace]
