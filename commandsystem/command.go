@@ -96,7 +96,7 @@ func (sc *SimpleCommand) CheckMatch(raw string, source CommandSource, m *discord
 		return false
 	}
 
-	return false
+	return true
 }
 
 func (sc *SimpleCommand) HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error {

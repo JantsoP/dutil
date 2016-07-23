@@ -45,7 +45,6 @@ func main() {
 
 func HandleReady(s *discordgo.Session, r *discordgo.Ready) {
 	log.Println("Ready received! Connected to", len(s.State.Guilds), "Guilds")
-	log.Println(s.State.MaxMessageCount)
 }
 
 func HandleServerJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
@@ -53,13 +52,7 @@ func HandleServerJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 }
 
 func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	log.Println(s.State.MaxMessageCount)
-	channel, err := s.State.Channel(m.ChannelID)
-	if err != nil {
-		log.Println("Err fetching channel from state", err)
-		return
-	}
-	log.Println(len(channel.Messages))
+
 }
 
 func Addcommands(system *commandsystem.System) {
@@ -69,7 +62,7 @@ func Addcommands(system *commandsystem.System) {
 			&commandsystem.ArgumentDef{Name: "what", Type: commandsystem.ArgumentTypeString},
 		},
 		RequiredArgs: 1,
-		RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
+		RunFunc: func(cmd *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
 			dgo.ChannelMessageSend(m.ChannelID, cmd.Args[0].Str())
 			return nil
 		},
@@ -79,7 +72,7 @@ func Addcommands(system *commandsystem.System) {
 		&commandsystem.SimpleCommand{
 			Name:        "Hey",
 			Description: "Nice greeting",
-			RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
+			RunFunc: func(cmd *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
 				dgo.ChannelMessageSend(m.ChannelID, "Wassup")
 				return nil
 			},
@@ -87,7 +80,7 @@ func Addcommands(system *commandsystem.System) {
 		&commandsystem.SimpleCommand{
 			Name:        "How",
 			Description: "What is this computer code thing what am doign halp",
-			RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
+			RunFunc: func(cmd *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
 				dgo.ChannelMessageSend(m.ChannelID, "Wassup")
 				return nil
 			},
@@ -104,7 +97,7 @@ func Addcommands(system *commandsystem.System) {
 	cmdInvite := &commandsystem.SimpleCommand{
 		Name:    "invite",
 		RunInDm: true,
-		RunFunc: func(parsed *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
+		RunFunc: func(parsed *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
 			dgo.ChannelMessageSend(m.ChannelID, "You smell bad https://discordapp.com/oauth2/authorize?client_id=&scope=bot&permissions=101376")
 			return nil
 		},
@@ -116,12 +109,11 @@ func Addcommands(system *commandsystem.System) {
 		Arguments: []*commandsystem.ArgumentDef{
 			&commandsystem.ArgumentDef{Name: "command", Type: commandsystem.ArgumentTypeString},
 		},
-		RunFunc: func(parsed *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
+		RunFunc: func(parsed *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
 			target := ""
 			if parsed.Args[0] != nil {
 				target = parsed.Args[0].Str()
 			}
-			log.Println(target)
 			help := system.GenerateHelp(target, 0)
 			dgo.ChannelMessageSend(m.ChannelID, help)
 			return nil

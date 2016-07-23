@@ -65,7 +65,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	defer func() {
 		if r := recover(); r != nil {
 			stack := string(debug.Stack())
-			log.Println("Recovered from panic in CommandHandler:", r, "\n", m.Content, "\n", stack)
+			log.Println("[CommandSystem]: Recovered from panic in CommandHandler:", r, "\n", m.Content, "\n", stack)
 			if cs.SendStackOnPanic {
 				_, err := dutil.SplitSendMessage(s, m.ChannelID, "Panic when handling Command! ```\n"+stack+"\n```")
 				if err != nil {
@@ -172,7 +172,7 @@ func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, 
 
 	if strings.Index(m.Content, prefix) == 0 {
 		ok = true
-		cmdStr = strings.TrimSpace(strings.Replace(m.Content, prefix, "", 1))
+		cmdStr = strings.Replace(m.Content, prefix, "", 1)
 	}
 	return
 }
