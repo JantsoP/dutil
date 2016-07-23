@@ -32,7 +32,7 @@ type System struct {
 // Returns a system with default configuration
 // Will add messagecreate handler if session is not nil
 // If prefix is not zero ("") it will also add a SimplePrefixProvider
-func NewSystem(session *discordgo.Session, prefix string) {
+func NewSystem(session *discordgo.Session, prefix string) *System {
 	cs := &System{
 		Commands:   make([]CommandHandler, 0),
 		IgnoreBots: true,
@@ -45,6 +45,7 @@ func NewSystem(session *discordgo.Session, prefix string) {
 	if prefix != "" {
 		cs.Prefix = NewSimplePrefixProvider(prefix)
 	}
+	return cs
 }
 
 func (cs *System) RegisterCommands(cmds ...CommandHandler) {
