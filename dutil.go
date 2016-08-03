@@ -3,7 +3,7 @@ package dutil
 // Package dutil provides general discordgo utilities that i find to be reusing across my discord projects
 
 import (
-	"github.com/bwmarrin/discordgo"
+// "github.com/bwmarrin/discordgo"
 )
 
 // Need mah pr to go through
