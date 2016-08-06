@@ -182,7 +182,7 @@ func (cs *System) GenerateHelp(target string, depth int) string {
 	for _, cmd := range cs.Commands {
 		help := cmd.GenerateHelp(target, depth)
 		if help != "" {
-			out += help + "\n"
+			out += help + "\n\n"
 		}
 	}
 	return out

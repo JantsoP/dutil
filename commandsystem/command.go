@@ -59,8 +59,12 @@ func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
 
 	out := fmt.Sprintf(" - **%s**%s: %s.", sc.Name, aliasesString, sc.Description)
 	if len(sc.Arguments) > 0 {
-		for _, v := range sc.Arguments {
-			out += fmt.Sprintf("\n  \\* %s - %s", v.String(), v.Description)
+		for k, v := range sc.Arguments {
+			reqString := ""
+			if k < sc.RequiredArgs {
+				reqString = " *(Required)* "
+			}
+			out += fmt.Sprintf("\n  \\* %s%s", v.String(), reqString)
 		}
 	}
 	return out
@@ -159,7 +163,7 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 				Args: parsedArgs,
 			}, nil
 		} else {
-			return nil, errors.New("Not enough argument provided, see help for more info")
+			return nil, errors.New("Not enough arguments provided, see help for more info")
 		}
 	}
 
@@ -334,8 +338,11 @@ type ArgumentDef struct {
 }
 
 func (a *ArgumentDef) String() string {
-
-	return a.Name + ":" + a.Type.String() + ""
+	str := a.Name + ":" + a.Type.String()
+	if a.Description != "" {
+		str += " - " + a.Description
+	}
+	return str
 }
 
 type ParsedArgument struct {
@@ -370,6 +377,6 @@ type ParsedCommand struct {
 }
 
 var (
-	ErrIncorrectNumArgs    = errors.New("Icorrect number of arguments")
+	ErrIncorrectNumArgs    = errors.New("Incorrect number of arguments")
 	ErrDiscordUserNotFound = errors.New("Discord user not found")
 )
