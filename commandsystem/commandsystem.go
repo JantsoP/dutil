@@ -24,9 +24,13 @@ type System struct {
 	DefaultHandler        CommandHandler // Called when no other handler is found and the bot is not mentioned
 	Prefix                PrefixProvider // Alternative command prefix
 
-	IgnoreBots bool // Set to ignore bots (NewSystem sets it to true)
+	// If set, called to censor the error output, (such as tokens and whatnot)
+	// If not set only the discord auth token will be censored
+	CensorError func(err error) string
 
+	IgnoreBots       bool // Set to ignore bots (NewSystem sets it to true)
 	SendStackOnPanic bool // Dumps the stack in a chat message when a panic happens in a command handler
+	SendError        bool // Set to send error messages that a command handler returned
 }
 
 // Returns a system with default configuration
@@ -177,6 +181,8 @@ func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, 
 	return
 }
 
+// Generates help for all commands
+// Will probably be reworked at one point
 func (cs *System) GenerateHelp(target string, depth int) string {
 	out := ""
 	for _, cmd := range cs.Commands {
@@ -188,10 +194,21 @@ func (cs *System) GenerateHelp(target string, depth int) string {
 	return out
 }
 
+// Checks the error output of a command and handles it as appropiate
 func (cs *System) CheckCommandError(err error, channel string, s *discordgo.Session) {
 	if err != nil {
+		msg := "Command Error"
+
+		if cs.SendError {
+			if cs.CensorError != nil {
+				msg += ": " + cs.CensorError(err)
+			} else {
+				msg += ": " + strings.Replace(err.Error(), s.Token, "<censored token>", -1)
+			}
+		}
+
 		log.Println("[CommandSystem]: Error handling command:", err)
-		dutil.SplitSendMessage(s, channel, "Error handling command: "+err.Error())
+		dutil.SplitSendMessage(s, channel, msg)
 	}
 }
 
