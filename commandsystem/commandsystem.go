@@ -206,8 +206,7 @@ func (cs *System) CheckCommandError(err error, channel string, s *discordgo.Sess
 				msg += ": " + strings.Replace(err.Error(), s.Token, "<censored token>", -1)
 			}
 		}
-
-		log.Println("[CommandSystem]: Error handling command:", err)
+		log.Output(2, "Error handling command: "+err.Error())
 		dutil.SplitSendMessage(s, channel, msg)
 	}
 }
