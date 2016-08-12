@@ -140,11 +140,11 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 			return nil, errors.New("Command not specified")
 		}
 
-		if split[0] == strings.ToLower(sc.Name) {
+		if strings.EqualFold(split[0], strings.ToLower(sc.Name)) {
 			buf = raw[len(strings.ToLower(sc.Name)):]
 		} else {
 			for _, alias := range sc.Aliases {
-				if strings.ToLower(alias) == strings.ToLower(split[0]) {
+				if strings.EqualFold(alias, split[0]) {
 					buf = raw[len(strings.ToLower(alias)):]
 					break
 				}
