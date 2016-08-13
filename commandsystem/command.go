@@ -8,28 +8,56 @@ import (
 	"strings"
 )
 
+var (
+	// Returned if the parameters passed to the command didnt match the command definition
+	ErrInvalidParameters   = errors.New("Invalid parameters passed to command, see help for usage")
+	ErrDiscordUserNotFound = errors.New("Discord user not found")
+)
+
 type CommandHandlerFunc func(raw string, m *discordgo.MessageCreate, s *discordgo.Session)
 
+// Represents a command handler to handle commands
 type CommandHandler interface {
+	// Called to check if the command matched "raw"
 	CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool
+
+	// Handle the command itself
 	HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error
-	GenerateHelp(target string, depth int) string // Generates help
+
+	// Generates help output, "depth" will be changed
+	GenerateHelp(target string, depth int) string
 }
 
-// A single command definition
+// A general purpose CommandHandler implementation
+// With support for aliases, automatically parsed arguments
+// with different combos and optionally ran in dm
+//
+// LIMITATIONS TO ARGUMENT COMBOS:
+// They need a length difference or one of the differences need to be a number
+// What works:
+// [string, string] : [string]
+// [string, number] : [number, string]
+//
+// For the below to work you need to have "UserArgRequireMention" set
+// otherwise it won't be able to distinguish between them:
+// [string, user] : [user, string]
+// You can't do:
+// [string, string] : [string, string] <- no way to determine what combo is the correct one
 type SimpleCommand struct {
 	Name        string   // Name of command, what its called from
 	Aliases     []string // Aliases which it can also be called from
 	Description string
 
 	HideFromHelp            bool // Hide it from help
-	IgnoreUserNotFoundError bool // Instead of throwing a User not found error, it will ignore it if it's not a requireed argument
+	UserArgRequireMention   bool // Set to require user mention in user mentions, otherwise it will attempt to search
+	IgnoreUserNotFoundError bool // Instead of throwing a User not found error, it will ignore it if it's not a required argument
 
 	RunInDm        bool // Run in dms, users can't be provided as arguments then
 	IgnoreMentions bool // Will not be triggered by mentions
 
-	RequiredArgs int // Number of reuquired arguments
-	Arguments    []*ArgumentDef
+	Arguments      []*ArgumentDef // Slice of argument definitions, ParsedCommand.Args will always be the same size as this slice (although the data may be nil)
+	RequiredArgs   int            // Number of reuquired arguments, ignored if combos is specified
+	ArgumentCombos [][]int        // Slice of argument pairs, will override RequiredArgs if specified
 
 	RunFunc func(cmd *ParsedCommand, source CommandSource, m *discordgo.MessageCreate) error
 }
@@ -116,7 +144,10 @@ func (sc *SimpleCommand) HandleCommand(raw string, source CommandSource, m *disc
 	return nil
 }
 
-// Parses a command into a ParsedCommand, where the slice length of the args is guaranteed to be the length of the toal amonut of arguments the command takes
+// Parses a command into a ParsedCommand
+// Arguments are split at space or you can put arguments inside quotes
+// You can escape both space and quotes using '\"' or '\ ' ('\\' to escape the escaping)
+// Quotes in the middle of an argument is trated as a normal character and not a seperator
 func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) (*ParsedCommand, error) {
 	// No arguments needed
 	if len(sc.Arguments) < 1 {
@@ -126,12 +157,14 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 		}, nil
 	}
 
-	channel, err := s.State.Channel(m.ChannelID)
-	if err != nil {
-		return nil, err
+	var channel *discordgo.Channel
+	if s != nil {
+		var err error
+		channel, err = s.State.Channel(m.ChannelID)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	parsedArgs := make([]*ParsedArgument, len(sc.Arguments))
 
 	buf := ""
 	if sc.Name != "" {
@@ -153,10 +186,11 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 	}
 
 	buf = strings.TrimSpace(buf)
-	curIndex := 0
+	parsedArgs := make([]*ParsedArgument, len(sc.Arguments))
 
+	// No parameters provided, and none required, just handle the mofo
 	if buf == "" {
-		if sc.RequiredArgs == 0 {
+		if sc.RequiredArgs == 0 && len(sc.ArgumentCombos) < 1 {
 			return &ParsedCommand{
 				Name: sc.Name,
 				Cmd:  sc,
@@ -167,43 +201,43 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 		}
 	}
 
-OUTER:
-	for k, v := range sc.Arguments {
+	rawArgs := ReadArgs(buf)
+	selectedCombo, ok := sc.findCombo(rawArgs)
+	if !ok {
+		return nil, ErrInvalidParameters
+	}
+
+	// Parse the arguments and fill up the PArsedArgs slice
+	for k, comboArg := range selectedCombo {
 		var val interface{}
-		var next int
 		var err error
-		switch v.Type {
-		case ArgumentTypeNumber:
-			val, next, err = ParseNumber(buf[curIndex:])
+
+		buf := rawArgs[k].Raw
+		if k == len(selectedCombo)-1 {
+			for i := k + 1; i < len(rawArgs); i++ {
+				buf += " " + rawArgs[i].Raw // Add the rest of the parameters to the end
+			}
+		}
+
+		switch sc.Arguments[comboArg].Type {
 		case ArgumentTypeString:
-			val, next, err = ParseString(buf[curIndex:], k == len(sc.Arguments)-1)
+			val = buf
+		case ArgumentTypeNumber:
+			val, err = ParseNumber(buf)
 		case ArgumentTypeUser:
-			if channel.IsPrivate {
-				break OUTER
+			if channel == nil || channel.IsPrivate {
+				continue // can't provide users in direct messages
 			}
-			val, next, err = ParseUser(buf[curIndex:], m.Message, s)
+			val, err = ParseUser(buf, m.Message, s)
 		}
-		rawArg := buf[curIndex : curIndex+next]
 
-		curIndex += next
-		curIndex += TrimSpaces(buf[curIndex:])
-
-		parsedArgs[k] = &ParsedArgument{
-			Raw:    rawArg,
-			Parsed: val,
-		}
 		if err != nil {
-			if err == ErrDiscordUserNotFound && sc.IgnoreUserNotFoundError {
-				parsedArgs[k] = nil
-			} else {
-				return nil, err
-			}
+			return nil, errors.New("Failed parsing arguments: " + err.Error())
 		}
-		if curIndex >= len(buf) {
-			if k+1 < sc.RequiredArgs {
-				return nil, ErrIncorrectNumArgs
-			}
-			break
+
+		parsedArgs[comboArg] = &ParsedArgument{
+			Raw:    buf,
+			Parsed: val,
 		}
 	}
 
@@ -212,6 +246,77 @@ OUTER:
 		Cmd:  sc,
 		Args: parsedArgs,
 	}, nil
+}
+
+// Finds a proper argument combo from the provided args
+func (sc *SimpleCommand) findCombo(rawArgs []*MatchedArg) ([]int, bool) {
+	// Find a argument combo to match against
+	if len(sc.ArgumentCombos) < 1 {
+		size := len(rawArgs)
+		if size > len(sc.Arguments) {
+			size = len(sc.Arguments)
+		}
+
+		selectedCombo := make([]int, size)
+		for i, _ := range rawArgs {
+			if i >= len(sc.Arguments) {
+				break
+			}
+
+			selectedCombo[i] = i
+		}
+		return selectedCombo, true
+	}
+
+	var selectedCombo []int
+	var ok bool
+
+	// Find a possible match
+OUTER:
+	for _, combo := range sc.ArgumentCombos {
+		if len(combo) > len(rawArgs) {
+			// No match
+			continue
+		}
+
+		// See if this combos arguments matches that of the parsed command
+		for k, comboArg := range combo {
+			arg := sc.Arguments[comboArg]
+
+			if !sc.checkArgumentMatch(rawArgs[k], arg.Type) {
+				continue OUTER // No match
+			}
+		}
+
+		// We got a match, if this match is stronger than the last one set it as selected
+		if len(combo) > len(selectedCombo) || !ok {
+			selectedCombo = combo
+			ok = true
+		}
+	}
+
+	return selectedCombo, ok
+}
+
+func (sc *SimpleCommand) checkArgumentMatch(raw *MatchedArg, definition ArgumentType) bool {
+	switch definition {
+	case ArgumentTypeNumber:
+		return raw.Type == ArgumentTypeNumber
+	case ArgumentTypeUser:
+		// Check if a user mention is required
+		// Otherwise it can be of any type
+		if sc.UserArgRequireMention {
+			return raw.Type == ArgumentTypeUser
+		} else {
+			return true
+		}
+	case ArgumentTypeString:
+		// Both number and user can be a string
+		// So it willl always match string no matter what
+		return true
+	}
+
+	return false
 }
 
 func TrimSpaces(buf string) (index int) {
@@ -223,13 +328,106 @@ func TrimSpaces(buf string) (index int) {
 	return len(buf)
 }
 
-// Parses a discord user from buf and returns the end index and error if any
-func ParseUser(buf string, m *discordgo.Message, s *discordgo.Session) (user *discordgo.User, index int, err error) {
-	nextSpace := findNextSpace(buf)
+type MatchedArg struct {
+	Type ArgumentType
+	Raw  string
+}
 
-	field := buf[:nextSpace]
-	index = nextSpace
+// Reads the command line and seperates it into a slice of strings
+// These strings are later processed depending on the argument type they belong to
+func ReadArgs(in string) []*MatchedArg {
+	rawArgs := make([]string, 0)
 
+	curBuf := ""
+	escape := false
+	quoted := false
+	for _, r := range in {
+		// Apply or remove escape mode
+		if r == '\\' {
+			if escape {
+				escape = false
+				curBuf += "\\"
+			} else {
+				escape = true
+			}
+
+			continue
+		}
+
+		// Check for other special tokens
+		isSpecialToken := false
+		if !escape {
+			isSpecialToken = true
+			switch r {
+			case ' ': // Split the args here if it's not quoted
+				if curBuf != "" && !quoted {
+					rawArgs = append(rawArgs, curBuf)
+					curBuf = ""
+					quoted = false
+				} else if quoted { // If it is quoted proceed as it was a normal rune
+					isSpecialToken = false
+				}
+			case '"':
+				// Set quoted mode if at start of arg, split arg if already in quoted mode
+				// treat quotes in the middle of arg as normal
+				if curBuf == "" && !quoted {
+					quoted = true
+				} else if quoted {
+					rawArgs = append(rawArgs, curBuf)
+					curBuf = ""
+					quoted = false
+				} else {
+					isSpecialToken = false
+				}
+			default:
+				isSpecialToken = false
+			}
+		}
+
+		if !isSpecialToken {
+			curBuf += string(r)
+		}
+
+		// Reset escape mode
+		escape = false
+	}
+
+	// Something was left in the buffer just add it to the end
+	if curBuf != "" {
+		rawArgs = append(rawArgs, curBuf)
+	}
+
+	// Match up the arguments to possible datatypes
+	// Used when finding the proper combo
+	// Only distinguishes between numbers and strings atm
+	// Which means it won't work properly if you have 2 combos
+	// where the only differences are string and user
+	// it will not work as expected
+	out := make([]*MatchedArg, len(rawArgs))
+	for i, raw := range rawArgs {
+		// Check for number
+		_, err := strconv.ParseFloat(raw, 64)
+		if err == nil {
+			out[i] = &MatchedArg{Type: ArgumentTypeNumber, Raw: raw}
+			continue
+		}
+		if strings.Index(raw, "<@") == 0 {
+			if raw[len(raw)-1] == '>' {
+				// Mention, so user
+				out[i] = &MatchedArg{Type: ArgumentTypeUser, Raw: raw}
+				continue
+			}
+		}
+		// Else it could be anything, no definitive answer
+		out[i] = &MatchedArg{Type: ArgumentTypeString, Raw: raw}
+	}
+
+	return out
+}
+
+// Parses a discord user from buf and returns the error if any
+func ParseUser(buf string, m *discordgo.Message, s *discordgo.Session) (user *discordgo.User, err error) {
+	field := buf
 	if strings.Index(buf, "<@") == 0 {
 		// Direct mention
 		id := field[2 : len(field)-1]
@@ -256,31 +454,10 @@ func ParseUser(buf string, m *discordgo.Message, s *discordgo.Session) (user *di
 	return
 }
 
-func ParseString(buf string, last bool) (s string, index int, err error) {
-	if last {
-		return buf, len(buf), nil
-	}
-
-	nextSpace := findNextSpace(buf)
-	index = nextSpace
-	s = buf[:nextSpace]
-	return
-}
-
 // Parses a number from buf and returns the end index and error if any
-func ParseNumber(buf string) (num float64, index int, err error) {
-	nextSpace := findNextSpace(buf)
-	index = nextSpace
-	num, err = strconv.ParseFloat(buf[:nextSpace], 64)
+func ParseNumber(buf string) (num float64, err error) {
+	num, err = strconv.ParseFloat(buf, 64)
 	return
-}
-
-func findNextSpace(buf string) int {
-	nextSpace := strings.Index(buf, " ")
-	if nextSpace == -1 {
-		nextSpace = len(buf)
-	}
-	return nextSpace
 }
 
 var ErrNotLoggedIn = errors.New("Not logged into discord")
@@ -328,7 +505,7 @@ func (a ArgumentType) String() string {
 	case ArgumentTypeUser:
 		return "@User"
 	}
-	return "???"
+	return "???" // ????
 }
 
 type ArgumentDef struct {
@@ -345,38 +522,39 @@ func (a *ArgumentDef) String() string {
 	return str
 }
 
+// Holds parsed argument data
 type ParsedArgument struct {
 	Raw    string
 	Parsed interface{}
 }
 
+// Helper to convert the data to an int
 func (p *ParsedArgument) Int() int {
 	val, _ := p.Parsed.(float64)
 	return int(val)
 }
 
+// Helper to convert the data to a string
 func (p *ParsedArgument) Str() string {
 	val, _ := p.Parsed.(string)
 	return val
 }
 
+// Helper to converty tht edata to a float64
 func (p *ParsedArgument) Float() float64 {
 	val, _ := p.Parsed.(float64)
 	return val
 }
 
+// Helper to convert the data to a discorduser
 func (p *ParsedArgument) DiscordUser() *discordgo.User {
 	val, _ := p.Parsed.(*discordgo.User)
 	return val
 }
 
+// Represents a parsedcommand
 type ParsedCommand struct {
 	Name string
 	Cmd  *SimpleCommand
 	Args []*ParsedArgument
 }
-
-var (
-	ErrIncorrectNumArgs    = errors.New("Incorrect number of arguments")
-	ErrDiscordUserNotFound = errors.New("Discord user not found")
-)

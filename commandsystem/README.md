@@ -1,6 +1,6 @@
 # commandsystem
 
-Simple command system you can use for discord bots, it has generated help menus and automatically parses arguments
+Advanced command system you can use for discord bots, it has generated help menus and automatically parses arguments out of definitions
 
 Documentation is very lacking atm because the system itself is very rough, once i clean it up and think it's ready i will make documentation for it
 
