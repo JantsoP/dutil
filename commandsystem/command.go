@@ -157,6 +157,7 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 		}, nil
 	}
 
+	// Retrieve channel if possible (session not provided in testing)
 	var channel *discordgo.Channel
 	if s != nil {
 		var err error
@@ -166,6 +167,7 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 		}
 	}
 
+	// Strip away the command name (or alias if that was what triggered it)
 	buf := ""
 	if sc.Name != "" {
 		split := strings.SplitN(raw, " ", 2)
