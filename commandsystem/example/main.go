@@ -62,7 +62,7 @@ func Addcommands(system *commandsystem.System) {
 			&commandsystem.ArgumentDef{Name: "what", Type: commandsystem.ArgumentTypeString},
 		},
 		RequiredArgs: 1,
-		RunFunc: func(cmd *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
+		RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
 			dgo.ChannelMessageSend(m.ChannelID, cmd.Args[0].Str())
 			return nil
 		},
@@ -72,7 +72,7 @@ func Addcommands(system *commandsystem.System) {
 		&commandsystem.SimpleCommand{
 			Name:        "Hey",
 			Description: "Nice greeting",
-			RunFunc: func(cmd *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
+			RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
 				dgo.ChannelMessageSend(m.ChannelID, "Wassup")
 				return nil
 			},
@@ -80,7 +80,7 @@ func Addcommands(system *commandsystem.System) {
 		&commandsystem.SimpleCommand{
 			Name:        "How",
 			Description: "What is this computer code thing what am doign halp",
-			RunFunc: func(cmd *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
+			RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
 				dgo.ChannelMessageSend(m.ChannelID, "Wassup")
 				return nil
 			},
@@ -97,7 +97,7 @@ func Addcommands(system *commandsystem.System) {
 	cmdInvite := &commandsystem.SimpleCommand{
 		Name:    "invite",
 		RunInDm: true,
-		RunFunc: func(parsed *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
+		RunFunc: func(parsed *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
 			dgo.ChannelMessageSend(m.ChannelID, "You smell bad https://discordapp.com/oauth2/authorize?client_id=&scope=bot&permissions=101376")
 			return nil
 		},
@@ -109,7 +109,7 @@ func Addcommands(system *commandsystem.System) {
 		Arguments: []*commandsystem.ArgumentDef{
 			&commandsystem.ArgumentDef{Name: "command", Type: commandsystem.ArgumentTypeString},
 		},
-		RunFunc: func(parsed *commandsystem.ParsedCommand, source commandsystem.CommandSource, m *discordgo.MessageCreate) error {
+		RunFunc: func(parsed *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
 			target := ""
 			if parsed.Args[0] != nil {
 				target = parsed.Args[0].Str()

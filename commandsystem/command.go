@@ -59,7 +59,7 @@ type SimpleCommand struct {
 	RequiredArgs   int            // Number of reuquired arguments, ignored if combos is specified
 	ArgumentCombos [][]int        // Slice of argument pairs, will override RequiredArgs if specified
 
-	RunFunc func(cmd *ParsedCommand, source CommandSource, m *discordgo.MessageCreate) error
+	RunFunc func(cmd *ParsedCommand, m *discordgo.MessageCreate) error
 }
 
 func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
@@ -136,9 +136,9 @@ func (sc *SimpleCommand) HandleCommand(raw string, source CommandSource, m *disc
 	if err != nil {
 		return err
 	}
-
+	parsed.Source = source
 	if sc.RunFunc != nil {
-		return sc.RunFunc(parsed, source, m)
+		return sc.RunFunc(parsed, m)
 	}
 
 	return nil
@@ -560,7 +560,8 @@ func (p *ParsedArgument) DiscordUser() *discordgo.User {
 
 // Represents a parsedcommand
 type ParsedCommand struct {
-	Name string
-	Cmd  *SimpleCommand
-	Args []*ParsedArgument
+	Name   string
+	Source CommandSource
+	Cmd    *SimpleCommand
+	Args   []*ParsedArgument
 }
