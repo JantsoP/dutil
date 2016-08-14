@@ -137,6 +137,19 @@ func (sc *SimpleCommand) HandleCommand(raw string, source CommandSource, m *disc
 		return err
 	}
 	parsed.Source = source
+
+	channel, err := s.State.Channel(m.ChannelID)
+	if err != nil {
+		return err
+	}
+
+	guild, err := s.State.Guild(channel.GuildID)
+	if err != nil {
+		return err
+	}
+	parsed.Channel = channel
+	parsed.Guild = guild
+
 	if sc.RunFunc != nil {
 		return sc.RunFunc(parsed, m)
 	}
@@ -560,8 +573,10 @@ func (p *ParsedArgument) DiscordUser() *discordgo.User {
 
 // Represents a parsedcommand
 type ParsedCommand struct {
-	Name   string
-	Source CommandSource
-	Cmd    *SimpleCommand
-	Args   []*ParsedArgument
+	Name    string
+	Source  CommandSource
+	Cmd     *SimpleCommand
+	Args    []*ParsedArgument
+	Channel *discordgo.Channel
+	Guild   *discordgo.Guild
 }
