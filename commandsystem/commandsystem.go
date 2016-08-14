@@ -197,17 +197,16 @@ func (cs *System) GenerateHelp(target string, depth int) string {
 // Checks the error output of a command and handles it as appropiate
 func (cs *System) CheckCommandError(err error, channel string, s *discordgo.Session) {
 	if err != nil {
-		msg := "Command Error"
-
 		if cs.SendError {
+			msg := "Command Error"
 			if cs.CensorError != nil {
 				msg += ": " + cs.CensorError(err)
 			} else {
 				msg += ": " + strings.Replace(err.Error(), s.Token, "<censored token>", -1)
 			}
+			dutil.SplitSendMessage(s, channel, msg)
 		}
 		log.Output(2, "Error handling command: "+err.Error())
-		dutil.SplitSendMessage(s, channel, msg)
 	}
 }
 
