@@ -25,6 +25,26 @@ func TestParseCommand(t *testing.T) {
 	assert.Equal(t, 123, parsed.Args[1].Int(), "Should match")
 }
 
+func TestParseCommandRequireArgs(t *testing.T) {
+	// Test normal command behaviour
+	testCommand := &SimpleCommand{
+		Name:         "testcmd",
+		RequiredArgs: 2,
+		Arguments: []*ArgumentDef{
+			&ArgumentDef{Name: "Str", Type: ArgumentTypeString},
+			&ArgumentDef{Name: "Num", Type: ArgumentTypeNumber},
+		},
+	}
+
+	testStr := "testcmd teststr"
+	_, err := testCommand.ParseCommand(testStr, &discordgo.MessageCreate{&discordgo.Message{Content: testStr}}, nil)
+	if !assert.Error(t, err) {
+		return
+	}
+	// assert.Equal(t, "teststr", parsed.Args[0].Str(), "Should match")
+	// assert.Equal(t, 123, parsed.Args[1].Int(), "Should match")
+}
+
 func TestParseCommandQouted(t *testing.T) {
 	// Test normal command behaviour
 	testCommand := &SimpleCommand{

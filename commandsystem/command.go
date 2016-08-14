@@ -254,6 +254,10 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 func (sc *SimpleCommand) findCombo(rawArgs []*MatchedArg) ([]int, bool) {
 	// Find a argument combo to match against
 	if len(sc.ArgumentCombos) < 1 {
+		if sc.RequiredArgs > 0 && len(rawArgs) < sc.RequiredArgs {
+			return nil, false
+		}
+
 		size := len(rawArgs)
 		if size > len(sc.Arguments) {
 			size = len(sc.Arguments)
