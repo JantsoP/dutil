@@ -1,7 +1,7 @@
 package dutil
 
 import (
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"os"
 	"testing"
 )
