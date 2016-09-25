@@ -74,9 +74,9 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 				_, err := dutil.SplitSendMessage(s, m.ChannelID, "Panic when handling Command! ```\n"+stack+"\n```")
 				if err != nil {
 					log.Println("[CommandSystem]: Failed sending stacktrace", err)
-				} else {
-					s.ChannelMessageSend(m.ChannelID, "Bot is panicking! Contact the bot owner!")
 				}
+			} else {
+				s.ChannelMessageSend(m.ChannelID, "Bot is panicking! Contact the bot owner!")
 			}
 		}
 	}()
