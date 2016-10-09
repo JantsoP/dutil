@@ -186,14 +186,14 @@ func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, 
 // Generates help for all commands
 // Will probably be reworked at one point
 func (cs *System) GenerateHelp(target string, depth int) string {
-	out := ""
+	out := "```ini\n"
 	for _, cmd := range cs.Commands {
-		help := cmd.GenerateHelp(target, depth)
+		help := cmd.GenerateHelp(target, depth, 0)
 		if help != "" {
-			out += help + "\n\n"
+			out += help + "\n"
 		}
 	}
-	return out
+	return out + "```"
 }
 
 // Checks the error output of a command and handles it as appropiate
@@ -228,4 +228,12 @@ func NewSimplePrefixProvider(prefix string) PrefixProvider {
 
 func (pp *SimplePrefixProvider) GetPrefix(s *discordgo.Session, m *discordgo.MessageCreate) string {
 	return pp.Prefix
+}
+
+func Indent(depth int) string {
+	indent := ""
+	for i := 0; i < depth; i++ {
+		indent += "__"
+	}
+	return indent
 }

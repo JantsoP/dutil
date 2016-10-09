@@ -24,8 +24,8 @@ type CommandHandler interface {
 	// Handle the command itself
 	HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error
 
-	// Generates help output, "depth" will be changed
-	GenerateHelp(target string, depth int) string
+	// Generates help output, maxDepth is how far into container help will go
+	GenerateHelp(target string, maxDepth, currentDepth int) string
 }
 
 // A general purpose CommandHandler implementation
@@ -62,7 +62,7 @@ type SimpleCommand struct {
 	RunFunc func(cmd *ParsedCommand, m *discordgo.MessageCreate) error
 }
 
-func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
+func (sc *SimpleCommand) GenerateHelp(target string, maxDepth, currentDepth int) string {
 	if target != "" {
 		if !sc.CheckMatch(target, CommandSourceHelp, nil, nil) {
 			return ""
@@ -73,8 +73,8 @@ func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
 		return ""
 	}
 
+	// Generate aliases
 	aliasesString := ""
-
 	if len(sc.Aliases) > 0 {
 		for k, v := range sc.Aliases {
 			if k != 0 {
@@ -82,19 +82,26 @@ func (sc *SimpleCommand) GenerateHelp(target string, depth int) string {
 			}
 			aliasesString += v
 		}
-		aliasesString = "(" + aliasesString + ")"
+		aliasesString = "{" + aliasesString + "}"
 	}
 
-	out := fmt.Sprintf(" - **%s**%s: %s.", sc.Name, aliasesString, sc.Description)
-	if len(sc.Arguments) > 0 {
-		for k, v := range sc.Arguments {
-			reqString := ""
-			if k < sc.RequiredArgs {
-				reqString = " *(Required)* "
-			}
-			out += fmt.Sprintf("\n  \\* %s%s", v.String(), reqString)
+	// Generate arguments
+	argsString := " "
+	for k, arg := range sc.Arguments {
+		if k < sc.RequiredArgs {
+			argsString += fmt.Sprintf("<%s> ", arg.String())
+		} else {
+			argsString += fmt.Sprintf("(%s) ", arg.String())
 		}
 	}
+
+	middle := aliasesString + argsString
+
+	// Final format
+	fmtName := fmt.Sprintf("%%-%ds", 15-(currentDepth*2))
+
+	out := fmt.Sprintf("%s"+fmtName+"=%-20s : %s", Indent(currentDepth), sc.Name, middle, sc.Description)
+
 	return out
 }
 
@@ -534,11 +541,7 @@ type ArgumentDef struct {
 }
 
 func (a *ArgumentDef) String() string {
-	str := a.Name + ":" + a.Type.String()
-	if a.Description != "" {
-		str += " - " + a.Description
-	}
-	return str
+	return a.Name
 }
 
 // Holds parsed argument data

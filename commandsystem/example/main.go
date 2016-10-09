@@ -27,7 +27,7 @@ func main() {
 	}
 	dgo = session
 
-	system := commandsystem.NewSystem(session, ":)")
+	system := commandsystem.NewSystem(session, ")")
 
 	Addcommands(system)
 
@@ -57,7 +57,8 @@ func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func Addcommands(system *commandsystem.System) {
 	echoCmd := &commandsystem.SimpleCommand{
-		Name: "echo",
+		Name:        "Echo",
+		Description: "Christmas is coming soon",
 		Arguments: []*commandsystem.ArgumentDef{
 			&commandsystem.ArgumentDef{Name: "what", Type: commandsystem.ArgumentTypeString},
 		},
@@ -86,7 +87,7 @@ func Addcommands(system *commandsystem.System) {
 			},
 		},
 		&commandsystem.CommandContainer{
-			Name:        "nested",
+			Name:        "Nested",
 			Description: "This is a nested command container",
 			Children: []commandsystem.CommandHandler{
 				echoCmd,
@@ -95,8 +96,9 @@ func Addcommands(system *commandsystem.System) {
 	}
 
 	cmdInvite := &commandsystem.SimpleCommand{
-		Name:    "invite",
-		RunInDm: true,
+		Name:        "Invite",
+		Description: "Responds with a bot invite",
+		RunInDm:     true,
 		RunFunc: func(parsed *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
 			dgo.ChannelMessageSend(m.ChannelID, "You smell bad https://discordapp.com/oauth2/authorize?client_id=&scope=bot&permissions=101376")
 			return nil
@@ -114,7 +116,7 @@ func Addcommands(system *commandsystem.System) {
 			if parsed.Args[0] != nil {
 				target = parsed.Args[0].Str()
 			}
-			help := system.GenerateHelp(target, 0)
+			help := system.GenerateHelp(target, 100)
 			dgo.ChannelMessageSend(m.ChannelID, help)
 			return nil
 		},
@@ -122,7 +124,7 @@ func Addcommands(system *commandsystem.System) {
 
 	commands := []commandsystem.CommandHandler{
 		&commandsystem.CommandContainer{
-			Name:        "fun",
+			Name:        "Fun",
 			Description: "Fun container",
 			Children:    funcCommands,
 		},

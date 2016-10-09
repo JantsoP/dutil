@@ -3,7 +3,6 @@ package commandsystem
 import (
 	"fmt"
 	"github.com/jonas747/discordgo"
-	"github.com/jonas747/dutil"
 	"strings"
 )
 
@@ -18,46 +17,64 @@ type CommandContainer struct {
 	NotFoundHandler CommandHandler // Ran when sub command not found, by default it will print this containers help
 }
 
-func (cc *CommandContainer) GenerateHelp(target string, depth int) string {
+func (cc *CommandContainer) GenerateHelp(target string, maxDepth, currentDepth int) string {
 	out := ""
 
-	aliasesStr := ""
-	if len(cc.Aliases) > 0 {
-		aliasesStr = " (" + strings.Join(cc.Aliases, ",") + ")"
+	containerHelp := cc.ContainerHelp(currentDepth)
 
-	}
 	if target != "" {
 		fields := strings.SplitN(target, " ", 2)
-		if strings.EqualFold(fields[0], cc.Name) {
-			// To further down the rabbit hole untill we find the proper commandhandler
-			if len(fields) > 1 {
-				if len(cc.Children) > 0 {
-					for _, child := range cc.Children {
-						out += child.GenerateHelp(fields[1], depth-1) + "\n"
-					}
-				} else {
-					out += "Unknown command :'("
+		// Not the command being targetted
+		if !strings.EqualFold(fields[0], cc.Name) {
+			return ""
+		}
+
+		out += containerHelp
+
+		// To further down the rabbit hole untill we find the proper commandhandler
+		if len(fields) > 1 {
+			for _, child := range cc.Children {
+				childHelp := child.GenerateHelp(fields[1], maxDepth, currentDepth+1) + "\n"
+				if strings.TrimSpace(childHelp) != "" {
+					out += "\n" + childHelp
 				}
-			} else {
-				// Show help for this container
-				out += fmt.Sprintf("**%s**%s: %s\n", cc.Name, aliasesStr, cc.Description)
-				if len(cc.Children) > 0 {
-					for _, child := range cc.Children {
-						out += child.GenerateHelp("", 0) + "\n"
+			}
+		} else {
+			// Show help for this container
+			if len(cc.Children) > 0 {
+				for _, child := range cc.Children {
+					childHelp := child.GenerateHelp("", maxDepth, currentDepth+1) + "\n"
+					if strings.TrimSpace(childHelp) != "" {
+						out += "\n" + childHelp
 					}
 				}
 			}
 		}
 	} else {
-		out += fmt.Sprintf("**%s** %s: %s", cc.Name, aliasesStr, cc.Description)
-		if depth > 0 && cc.Children != nil {
+		out += containerHelp
+		if currentDepth < maxDepth {
 			for _, child := range cc.Children {
-				out += "\n" + child.GenerateHelp("", depth-1)
+				childHelp := child.GenerateHelp("", maxDepth, currentDepth+1)
+				if strings.TrimSpace(childHelp) != "" {
+					out += "\n" + childHelp
+				}
 			}
 		}
 	}
 
 	return out
+}
+
+// Returns just the containers help without any subcommands
+func (cc *CommandContainer) ContainerHelp(depth int) string {
+	aliasesStr := ""
+	if len(cc.Aliases) > 0 {
+		aliasesStr = " {" + strings.Join(cc.Aliases, ",") + "}"
+	}
+
+	fmtName := fmt.Sprintf("%%-%ds", 15-(depth*2))
+
+	return fmt.Sprintf("%s"+fmtName+"=%-20s : %s", Indent(depth), cc.Name, aliasesStr, cc.Description)
 }
 
 func (cc *CommandContainer) CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool {
@@ -92,20 +109,19 @@ func (cc *CommandContainer) HandleCommand(raw string, source CommandSource, m *d
 			if cc.NotFoundHandler != nil {
 				cc.NotFoundHandler.HandleCommand(split[1], source, m, s)
 			} else {
-				cc.SendUnknownHelp(m, s)
+				cc.SendUnknownHelp(m, s, split[1])
 			}
 		}
 	} else {
 		if cc.DefaultHandler != nil {
 			cc.DefaultHandler.HandleCommand("", source, m, s)
 		} else {
-			cc.SendUnknownHelp(m, s)
+			cc.SendUnknownHelp(m, s, "")
 		}
 	}
 	return nil
 }
 
-func (cc *CommandContainer) SendUnknownHelp(m *discordgo.MessageCreate, s *discordgo.Session) {
-	helpStr := cc.GenerateHelp("", 1)
-	dutil.SplitSendMessage(s, m.ChannelID, "**Unknown command, Help:**\n"+helpStr)
+func (cc *CommandContainer) SendUnknownHelp(m *discordgo.MessageCreate, s *discordgo.Session, badCmd string) {
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s: Unknown subcommand (%q) D: see help for usage.", cc.Name, badCmd))
 }
