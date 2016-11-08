@@ -82,16 +82,16 @@ func (sc *SimpleCommand) GenerateHelp(target string, maxDepth, currentDepth int)
 			}
 			aliasesString += v
 		}
-		aliasesString = "{" + aliasesString + "}"
+		aliasesString = " {" + aliasesString + "}"
 	}
 
 	// Generate arguments
-	argsString := " "
+	argsString := ""
 	for k, arg := range sc.Arguments {
 		if k < sc.RequiredArgs {
-			argsString += fmt.Sprintf("<%s> ", arg.String())
+			argsString += fmt.Sprintf(" <%s>", arg.String())
 		} else {
-			argsString += fmt.Sprintf("(%s) ", arg.String())
+			argsString += fmt.Sprintf(" (%s)", arg.String())
 		}
 	}
 

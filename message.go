@@ -12,21 +12,53 @@ import (
 // Last newline before 2k or last whitespace before 2k or if that fails
 // (no whitespace) just split at 2k
 func SplitSendMessage(s *discordgo.Session, channelID, message string) ([]*discordgo.Message, error) {
+	return SplitSendMessagePS(s, channelID, message, "", "", false, false)
+}
 
-	msg, rest := StrSplit(message, 2000)
-	discordMessage, err := s.ChannelMessageSend(channelID, msg)
-	if err != nil {
-		return nil, err
-	}
+// A helper for sending potentially long messages
+// If the message is longer than 2k characters it will split at
+// Last newline before 2k or last whitespace before 2k or if that fails
+// (no whitespace) just split at 2k
+// Prefix is added to the start of each message sent (usefull for codeblocks),
+// Prefix is not not added to the first one if prefixStart is false
+// Suffix is added to the end of each message, and not the last message if suffixend is false
+func SplitSendMessagePS(s *discordgo.Session, channelID, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
 
-	ret := []*discordgo.Message{discordMessage}
+	rest := message
+	first := true
 
-	if rest != "" {
-		m, err := SplitSendMessage(s, channelID, rest)
-		if err != nil {
-			return ret, err
+	ret := make([]*discordgo.Message, 0)
+
+	for {
+		maxLen := 2000
+
+		// Take away prefix and suffix length if used
+		if prefixStart || !first {
+			maxLen -= utf8.RuneCountInString(prefix)
 		}
-		ret = append(ret, m...)
+		maxLen -= utf8.RuneCountInString(suffix)
+
+		msg, newRest := StrSplit(rest, maxLen)
+
+		// Add the actual prefix and suffix
+		if prefixStart || !first {
+			msg = prefix + msg
+		}
+		msg += suffix
+
+		discordMessage, err := s.ChannelMessageSend(channelID, msg)
+		if err != nil {
+			return nil, err
+		}
+
+		ret = append(ret, discordMessage)
+
+		rest = newRest
+		if rest == "" {
+			break
+		}
+
+		first = false
 	}
 
 	return ret, nil
