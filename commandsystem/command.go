@@ -219,13 +219,21 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 				Args: parsedArgs,
 			}, nil
 		} else {
-			return nil, errors.New("Not enough arguments provided, see help for more info")
+			if len(sc.ArgumentCombos) < 1 {
+				err := sc.ErrMissingArgs(0)
+				return nil, err
+			}
+			return nil, ErrInvalidParameters
 		}
 	}
 
 	rawArgs := ReadArgs(buf)
 	selectedCombo, ok := sc.findCombo(rawArgs)
 	if !ok {
+		if len(sc.ArgumentCombos) < 1 {
+			err := sc.ErrMissingArgs(len(rawArgs))
+			return nil, err
+		}
 		return nil, ErrInvalidParameters
 	}
 
@@ -322,6 +330,27 @@ OUTER:
 	}
 
 	return selectedCombo, ok
+}
+
+func (sc *SimpleCommand) ErrMissingArgs(provided int) error {
+	names := ""
+	for i, v := range sc.Arguments {
+		if i < provided {
+			continue
+		}
+
+		if i != provided {
+			names += ", "
+		}
+
+		if i > sc.RequiredArgs {
+			names += "(optional)"
+		}
+		names += v.Name
+
+	}
+
+	return fmt.Errorf("Missing arguments: %s.", names)
 }
 
 func (sc *SimpleCommand) checkArgumentMatch(raw *MatchedArg, definition ArgumentType) bool {
