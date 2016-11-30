@@ -1,7 +1,7 @@
 package dutil
 
 import (
-	"github.com/jonas747/discordgo"
+	"github.com/bwmarrin/discordgo"
 	"strings"
 	"unicode"
 	"unicode/utf8"

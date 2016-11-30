@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/jonas747/discordgo"
+	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dutil/commandsystem"
 	"log"
 )

@@ -3,7 +3,7 @@ package dutil
 // Package dutil provides general discordgo utilities that i find to be reusing across my discord projects
 
 import (
-	"github.com/jonas747/discordgo"
+	"github.com/bwmarrin/discordgo"
 )
 
 // Returns all guild members in a guild

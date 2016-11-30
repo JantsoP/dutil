@@ -1,7 +1,7 @@
 package commandsystem
 
 import (
-	"github.com/jonas747/discordgo"
+	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
