@@ -111,3 +111,21 @@ func TestParseCommandCombo(t *testing.T) {
 	assert.Equal(t, "teststr", parsed.Args[0].Str(), "combo2 Should match")
 	assert.Equal(t, 123, parsed.Args[1].Int(), "combo2 Should match")
 }
+
+func TestRebuildArgs(t *testing.T) {
+	// Test normal command behaviour
+	testCommand := &SimpleCommand{
+		Name: "testcmd",
+		Arguments: []*ArgumentDef{
+			&ArgumentDef{Name: "Str", Type: ArgumentTypeString},
+		},
+	}
+
+	arg := `this is "a fun" set of args`
+	testStr := "testcmd " + arg
+	parsed, err := testCommand.ParseCommand(testStr, &discordgo.MessageCreate{&discordgo.Message{Content: testStr}}, nil)
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, arg, parsed.Args[0].Str(), "Should match")
+}

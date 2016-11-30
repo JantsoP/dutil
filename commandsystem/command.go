@@ -242,10 +242,16 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 		var val interface{}
 		var err error
 
-		buf := rawArgs[k].Raw
+		buf := rawArgs[k].Raw.Str
+		// If last arg att all the remaning rawargs, building up the
 		if k == len(selectedCombo)-1 {
 			for i := k + 1; i < len(rawArgs); i++ {
-				buf += " " + rawArgs[i].Raw // Add the rest of the parameters to the end
+				switch rawArgs[i].Raw.Seperator {
+				case ArgSeperatorSpace:
+					buf += " " + rawArgs[i].Raw.Str
+				case ArgSeperatorQuote:
+					buf += " \"" + rawArgs[i].Raw.Str + "\""
+				}
 			}
 		}
 
@@ -385,13 +391,25 @@ func TrimSpaces(buf string) (index int) {
 
 type MatchedArg struct {
 	Type ArgumentType
-	Raw  string
+	Raw  *RawArg
+}
+
+type ArgSeperator int
+
+const (
+	ArgSeperatorSpace ArgSeperator = iota
+	ArgSeperatorQuote
+)
+
+type RawArg struct {
+	Str       string
+	Seperator ArgSeperator
 }
 
 // Reads the command line and seperates it into a slice of strings
 // These strings are later processed depending on the argument type they belong to
 func ReadArgs(in string) []*MatchedArg {
-	rawArgs := make([]string, 0)
+	rawArgs := make([]*RawArg, 0)
 
 	curBuf := ""
 	escape := false
@@ -416,7 +434,7 @@ func ReadArgs(in string) []*MatchedArg {
 			switch r {
 			case ' ': // Split the args here if it's not quoted
 				if curBuf != "" && !quoted {
-					rawArgs = append(rawArgs, curBuf)
+					rawArgs = append(rawArgs, &RawArg{curBuf, ArgSeperatorSpace})
 					curBuf = ""
 					quoted = false
 				} else if quoted { // If it is quoted proceed as it was a normal rune
@@ -428,7 +446,7 @@ func ReadArgs(in string) []*MatchedArg {
 				if curBuf == "" && !quoted {
 					quoted = true
 				} else if quoted {
-					rawArgs = append(rawArgs, curBuf)
+					rawArgs = append(rawArgs, &RawArg{curBuf, ArgSeperatorQuote})
 					curBuf = ""
 					quoted = false
 				} else {
@@ -449,25 +467,25 @@ func ReadArgs(in string) []*MatchedArg {
 
 	// Something was left in the buffer just add it to the end
 	if curBuf != "" {
-		rawArgs = append(rawArgs, curBuf)
+		rawArgs = append(rawArgs, &RawArg{curBuf, ArgSeperatorSpace})
 	}
 
 	// Match up the arguments to possible datatypes
 	// Used when finding the proper combo
-	// Only distinguishes between numbers and strings atm
+	// Only distinguishes between numbers, strings amnd user mentions atm
 	// Which means it won't work properly if you have 2 combos
 	// where the only differences are string and user
 	// it will not work as expected
 	out := make([]*MatchedArg, len(rawArgs))
 	for i, raw := range rawArgs {
 		// Check for number
-		_, err := strconv.ParseFloat(raw, 64)
+		_, err := strconv.ParseFloat(raw.Str, 64)
 		if err == nil {
 			out[i] = &MatchedArg{Type: ArgumentTypeNumber, Raw: raw}
 			continue
 		}
-		if strings.Index(raw, "<@") == 0 {
-			if raw[len(raw)-1] == '>' {
+		if strings.Index(raw.Str, "<@") == 0 {
+			if raw.Str[len(raw.Str)-1] == '>' {
 				// Mention, so user
 				out[i] = &MatchedArg{Type: ArgumentTypeUser, Raw: raw}
 				continue
