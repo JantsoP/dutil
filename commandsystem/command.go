@@ -1,6 +1,7 @@
 package commandsystem
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/jonas747/discordgo"
@@ -12,6 +13,18 @@ var (
 	// Returned if the parameters passed to the command didnt match the command definition
 	ErrInvalidParameters   = errors.New("Invalid parameters passed to command, see help for usage")
 	ErrDiscordUserNotFound = errors.New("Discord user not found")
+)
+
+type ContextKey int
+
+const (
+	KeySession ContextKey = iota
+	KeyMessage
+	KeyCommand
+	KeySource
+	KeyArgs
+	KeyGuild
+	KeyChannel
 )
 
 type CommandHandlerFunc func(raw string, m *discordgo.MessageCreate, s *discordgo.Session)
@@ -30,8 +43,21 @@ type CommandHandler interface {
 
 // A general purpose CommandHandler implementation
 // With support for aliases, automatically parsed arguments
-// with different combos and optionally ran in dm
+// with different combos, generated help and optionally ran in dm
 //
+// Argument combos
+// Argument combos are a way to make the order of arguments dynamic, you should be carefull with these
+// and not use them for any arguement types that can't be distinguished from eachtother
+//
+// Say you have a command that takes 2 arguments, a discord user and a number
+// since these values can easily be distinguished (UserArgRequireMention is set)
+// you can set it up like this:
+// arg 0: user arg
+// arg 1: number arg
+// combos: [][]int{[]int{0,1}, []int{1,0}}
+// (the number in combos referrs to the arguement index)
+// and now arg 0 will always be a user and and arg 1 will always be a number arg
+// no matter the order
 // LIMITATIONS TO ARGUMENT COMBOS:
 // They need a length difference or one of the differences need to be a number
 // What works:
@@ -43,10 +69,11 @@ type CommandHandler interface {
 // [string, user] : [user, string]
 // You can't do:
 // [string, string] : [string, string] <- no way to determine what combo is the correct one
-type SimpleCommand struct {
-	Name        string   // Name of command, what its called from
-	Aliases     []string // Aliases which it can also be called from
-	Description string
+type Command struct {
+	Name            string   // Name of command, what its called from
+	Aliases         []string // Aliases which it can also be called from
+	Description     string   // Description shown in non targetted help
+	LongDescription string   // Longer description when this command was targetted
 
 	HideFromHelp            bool // Hide it from help
 	UserArgRequireMention   bool // Set to require user mention in user mentions, otherwise it will attempt to search
@@ -55,14 +82,17 @@ type SimpleCommand struct {
 	RunInDm        bool // Run in dms, users can't be provided as arguments then
 	IgnoreMentions bool // Will not be triggered by mentions
 
-	Arguments      []*ArgumentDef // Slice of argument definitions, ParsedCommand.Args will always be the same size as this slice (although the data may be nil)
-	RequiredArgs   int            // Number of reuquired arguments, ignored if combos is specified
-	ArgumentCombos [][]int        // Slice of argument pairs, will override RequiredArgs if specified
+	Arguments      []*ArgDef // Slice of argument definitions, ctx.Args will always be the same size as this slice (although the data may be nil)
+	RequiredArgs   int       // Number of reuquired arguments, ignored if combos is specified
+	ArgumentCombos [][]int   // Slice of argument pairs, will override RequiredArgs if specified
 
-	RunFunc func(cmd *ParsedCommand, m *discordgo.MessageCreate) error
+	// Run is ran the the command has sucessfully been parsed
+	// It returns a reply and an error
+	// the reply can have a type of string, *MessageEmbed or error
+	Run func(ctx context.Context) (interface{}, error)
 }
 
-func (sc *SimpleCommand) GenerateHelp(target string, maxDepth, currentDepth int) string {
+func (sc *Command) GenerateHelp(target string, maxDepth, currentDepth int) string {
 	if target != "" {
 		if !sc.CheckMatch(target, CommandSourceHelp, nil, nil) {
 			return ""
@@ -101,11 +131,23 @@ func (sc *SimpleCommand) GenerateHelp(target string, maxDepth, currentDepth int)
 	fmtName := fmt.Sprintf("%%-%ds", 15-(currentDepth*2))
 
 	out := fmt.Sprintf("%s"+fmtName+"=%-20s : %s", Indent(currentDepth), sc.Name, middle, sc.Description)
-
+	if target != "" && sc.LongDescription != "" {
+		out += "\n" + sc.LongDescription
+	}
 	return out
 }
 
-func (sc *SimpleCommand) CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (sc *Command) CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+	// Check if this is a mention and ignore if so
+	if source == CommandSourceMention && sc.IgnoreMentions {
+		return false
+	}
+
+	// Same as above with dm's
+	if source == CommandSourceDM && !sc.RunInDm {
+		return false
+	}
+
 	fields := strings.SplitN(raw, " ", 2)
 	if len(fields) < 1 {
 		return false
@@ -125,40 +167,33 @@ func (sc *SimpleCommand) CheckMatch(raw string, source CommandSource, m *discord
 		return false
 	}
 
-	// Check if this is a mention and ignore if so
-	if source == CommandSourceMention && sc.IgnoreMentions {
-		return false
-	}
-
-	// Same as above with dm's
-	if source == CommandSourceDM && !sc.RunInDm {
-		return false
-	}
-
 	return true
 }
 
-func (sc *SimpleCommand) HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error {
-	parsed, err := sc.ParseCommand(raw, m, s)
+func (sc *Command) HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error {
+	ctx, err := sc.ParseCommand(raw, m, s)
 	if err != nil {
-		return err
-	}
-	parsed.Source = source
-
-	channel, err := s.State.Channel(m.ChannelID)
-	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, "Failed parsing command: "+err.Error())
 		return err
 	}
 
-	guild, err := s.State.Guild(channel.GuildID)
+	ctx = context.WithValue(ctx, KeySource, source)
+
+	if sc.Run == nil {
+		return nil
+	}
+
+	reply, err := sc.Run(ctx)
+	if reply != nil {
+		_, err2 := SendResponseInterface(ctx, reply)
+		if err2 != nil {
+			return err2
+		}
+	}
+
+	// Command error
 	if err != nil {
 		return err
-	}
-	parsed.Channel = channel
-	parsed.Guild = guild
-
-	if sc.RunFunc != nil {
-		return sc.RunFunc(parsed, m)
 	}
 
 	return nil
@@ -168,23 +203,39 @@ func (sc *SimpleCommand) HandleCommand(raw string, source CommandSource, m *disc
 // Arguments are split at space or you can put arguments inside quotes
 // You can escape both space and quotes using '\"' or '\ ' ('\\' to escape the escaping)
 // Quotes in the middle of an argument is trated as a normal character and not a seperator
-func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) (*ParsedCommand, error) {
-	// No arguments needed
-	if len(sc.Arguments) < 1 {
-		return &ParsedCommand{
-			Name: sc.Name,
-			Cmd:  sc,
-		}, nil
-	}
+func (sc *Command) ParseCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) (context.Context, error) {
 
-	// Retrieve channel if possible (session not provided in testing)
+	ctx := context.Background()
+
+	ctx = context.WithValue(ctx, KeySession, s)
+	ctx = context.WithValue(ctx, KeyMessage, m)
+	ctx = context.WithValue(ctx, KeyCommand, sc)
+
+	// Retrieve guild and channel if possible (session not provided in testing)
 	var channel *discordgo.Channel
+	var guild *discordgo.Guild
 	if s != nil {
 		var err error
 		channel, err = s.State.Channel(m.ChannelID)
 		if err != nil {
 			return nil, err
 		}
+		ctx = context.WithValue(ctx, KeyChannel, channel)
+
+		guild, err = s.State.Guild(channel.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		ctx = context.WithValue(ctx, KeyGuild, guild)
+
+		s.State.RLock()
+		defer s.State.RUnlock()
+	}
+
+	// No arguments needed
+	if len(sc.Arguments) < 1 {
+		return ctx, nil
 	}
 
 	// Strip away the command name (or alias if that was what triggered it)
@@ -209,15 +260,16 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 
 	buf = strings.TrimSpace(buf)
 	parsedArgs := make([]*ParsedArgument, len(sc.Arguments))
+	for i, v := range sc.Arguments {
+		if v.Default != nil {
+			parsedArgs[i] = &ParsedArgument{Parsed: v.Default}
+		}
+	}
 
 	// No parameters provided, and none required, just handle the mofo
 	if buf == "" {
 		if sc.RequiredArgs == 0 && len(sc.ArgumentCombos) < 1 {
-			return &ParsedCommand{
-				Name: sc.Name,
-				Cmd:  sc,
-				Args: parsedArgs,
-			}, nil
+			return context.WithValue(ctx, KeyArgs, parsedArgs), nil
 		} else {
 			if len(sc.ArgumentCombos) < 1 {
 				err := sc.ErrMissingArgs(0)
@@ -256,15 +308,15 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 		}
 
 		switch sc.Arguments[comboArg].Type {
-		case ArgumentTypeString:
+		case ArgumentString:
 			val = buf
-		case ArgumentTypeNumber:
+		case ArgumentNumber:
 			val, err = ParseNumber(buf)
-		case ArgumentTypeUser:
+		case ArgumentUser:
 			if channel == nil || channel.IsPrivate {
 				continue // can't provide users in direct messages
 			}
-			val, err = ParseUser(buf, m.Message, s)
+			val, err = ParseUser(buf, m.Message, guild)
 		}
 
 		if err != nil {
@@ -277,15 +329,11 @@ func (sc *SimpleCommand) ParseCommand(raw string, m *discordgo.MessageCreate, s 
 		}
 	}
 
-	return &ParsedCommand{
-		Name: sc.Name,
-		Cmd:  sc,
-		Args: parsedArgs,
-	}, nil
+	return context.WithValue(ctx, KeyArgs, parsedArgs), nil
 }
 
 // Finds a proper argument combo from the provided args
-func (sc *SimpleCommand) findCombo(rawArgs []*MatchedArg) ([]int, bool) {
+func (sc *Command) findCombo(rawArgs []*MatchedArg) ([]int, bool) {
 	// Find a argument combo to match against
 	if len(sc.ArgumentCombos) < 1 {
 		if sc.RequiredArgs > 0 && len(rawArgs) < sc.RequiredArgs {
@@ -338,7 +386,7 @@ OUTER:
 	return selectedCombo, ok
 }
 
-func (sc *SimpleCommand) ErrMissingArgs(provided int) error {
+func (sc *Command) ErrMissingArgs(provided int) error {
 	names := ""
 	for i, v := range sc.Arguments {
 		if i < provided {
@@ -359,19 +407,19 @@ func (sc *SimpleCommand) ErrMissingArgs(provided int) error {
 	return fmt.Errorf("Missing arguments: %s.", names)
 }
 
-func (sc *SimpleCommand) checkArgumentMatch(raw *MatchedArg, definition ArgumentType) bool {
+func (sc *Command) checkArgumentMatch(raw *MatchedArg, definition ArgumentType) bool {
 	switch definition {
-	case ArgumentTypeNumber:
-		return raw.Type == ArgumentTypeNumber
-	case ArgumentTypeUser:
+	case ArgumentNumber:
+		return raw.Type == ArgumentNumber
+	case ArgumentUser:
 		// Check if a user mention is required
 		// Otherwise it can be of any type
 		if sc.UserArgRequireMention {
-			return raw.Type == ArgumentTypeUser
+			return raw.Type == ArgumentUser
 		} else {
 			return true
 		}
-	case ArgumentTypeString:
+	case ArgumentString:
 		// Both number and user can be a string
 		// So it willl always match string no matter what
 		return true
@@ -481,25 +529,25 @@ func ReadArgs(in string) []*MatchedArg {
 		// Check for number
 		_, err := strconv.ParseFloat(raw.Str, 64)
 		if err == nil {
-			out[i] = &MatchedArg{Type: ArgumentTypeNumber, Raw: raw}
+			out[i] = &MatchedArg{Type: ArgumentNumber, Raw: raw}
 			continue
 		}
 		if strings.Index(raw.Str, "<@") == 0 {
 			if raw.Str[len(raw.Str)-1] == '>' {
 				// Mention, so user
-				out[i] = &MatchedArg{Type: ArgumentTypeUser, Raw: raw}
+				out[i] = &MatchedArg{Type: ArgumentUser, Raw: raw}
 				continue
 			}
 		}
 		// Else it could be anything, no definitive answer
-		out[i] = &MatchedArg{Type: ArgumentTypeString, Raw: raw}
+		out[i] = &MatchedArg{Type: ArgumentString, Raw: raw}
 	}
 
 	return out
 }
 
 // Parses a discord user from buf and returns the error if any
-func ParseUser(buf string, m *discordgo.Message, s *discordgo.Session) (user *discordgo.User, err error) {
+func ParseUser(buf string, m *discordgo.Message, guild *discordgo.Guild) (user *discordgo.User, err error) {
 	field := buf
 	if strings.Index(buf, "<@") == 0 {
 		// Direct mention
@@ -517,7 +565,7 @@ func ParseUser(buf string, m *discordgo.Message, s *discordgo.Session) (user *di
 		}
 	} else {
 		// Search for username
-		user, err = FindDiscordUser(field, m, s)
+		user, err = FindDiscordUser(field, m, guild)
 	}
 
 	if user == nil {
@@ -535,23 +583,11 @@ func ParseNumber(buf string) (num float64, err error) {
 
 var ErrNotLoggedIn = errors.New("Not logged into discord")
 
-func FindDiscordUser(str string, m *discordgo.Message, s *discordgo.Session) (*discordgo.User, error) {
-	if s == nil || s.Token == "" {
+func FindDiscordUser(str string, m *discordgo.Message, guild *discordgo.Guild) (*discordgo.User, error) {
+	if guild == nil {
 		return nil, ErrNotLoggedIn
 	}
 
-	channel, err := s.State.Channel(m.ChannelID)
-	if err != nil {
-		return nil, err
-	}
-
-	guild, err := s.State.Guild(channel.GuildID)
-	if err != nil {
-		return nil, err
-	}
-
-	s.State.RLock()
-	defer s.State.RUnlock()
 	for _, v := range guild.Members {
 		if strings.EqualFold(str, v.User.Username) {
 			return v.User, nil
@@ -564,30 +600,31 @@ func FindDiscordUser(str string, m *discordgo.Message, s *discordgo.Session) (*d
 type ArgumentType int
 
 const (
-	ArgumentTypeString ArgumentType = iota
-	ArgumentTypeNumber
-	ArgumentTypeUser
+	ArgumentString ArgumentType = iota
+	ArgumentNumber
+	ArgumentUser
 )
 
 func (a ArgumentType) String() string {
 	switch a {
-	case ArgumentTypeString:
+	case ArgumentString:
 		return "String"
-	case ArgumentTypeNumber:
+	case ArgumentNumber:
 		return "Number"
-	case ArgumentTypeUser:
+	case ArgumentUser:
 		return "@User"
 	}
 	return "???" // ????
 }
 
-type ArgumentDef struct {
+type ArgDef struct {
 	Name        string
 	Description string
 	Type        ArgumentType
+	Default     interface{}
 }
 
-func (a *ArgumentDef) String() string {
+func (a *ArgDef) String() string {
 	return a.Name
 }
 
@@ -619,14 +656,4 @@ func (p *ParsedArgument) Float() float64 {
 func (p *ParsedArgument) DiscordUser() *discordgo.User {
 	val, _ := p.Parsed.(*discordgo.User)
 	return val
-}
-
-// Represents a parsedcommand
-type ParsedCommand struct {
-	Name    string
-	Source  CommandSource
-	Cmd     *SimpleCommand
-	Args    []*ParsedArgument
-	Channel *discordgo.Channel
-	Guild   *discordgo.Guild
 }

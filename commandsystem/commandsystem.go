@@ -21,6 +21,7 @@ type System struct {
 	Commands []CommandHandler // Registered commands
 
 	DefaultMentionHandler CommandHandler // Called when no other handler is found and the bot is mentioned
+	DefaultDMHandler      CommandHandler // Called when no other handler is found this is a dm channel
 	DefaultHandler        CommandHandler // Called when no other handler is found and the bot is not mentioned
 	Prefix                PrefixProvider // Alternative command prefix
 
@@ -107,15 +108,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	// Check if any additional fields were provided to the command, if not just run the default command if possible
 	if commandStr == "" {
 
-		if mention && cs.DefaultMentionHandler != nil {
-			err := cs.DefaultMentionHandler.HandleCommand(commandStr, source, m, s)
-			cs.CheckCommandError(err, m.ChannelID, s)
-		}
-
-		if !mention && cs.DefaultHandler != nil {
-			err := cs.DefaultHandler.HandleCommand(commandStr, source, m, s)
-			cs.CheckCommandError(err, m.ChannelID, s)
-		}
+		cs.triggerDefaultHandler(commandStr, source, m, s)
 
 		return
 	}
@@ -130,16 +123,26 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	}
 
 	// No handler found, check the default one
-	if !mention && cs.DefaultHandler != nil {
-		err := cs.DefaultHandler.HandleCommand("", source, m, s)
-		cs.CheckCommandError(err, m.ChannelID, s)
-	}
+	cs.triggerDefaultHandler(commandStr, source, m, s)
 
-	if mention && cs.DefaultMentionHandler != nil {
-		err := cs.DefaultMentionHandler.HandleCommand("", source, m, s)
-		cs.CheckCommandError(err, m.ChannelID, s)
-	}
+}
 
+// Trigger the default handler for the appropiate source
+func (cs *System) triggerDefaultHandler(cmdStr string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) {
+	switch source {
+	case CommandSourceDM:
+		if cs.DefaultDMHandler != nil {
+			cs.CheckCommandError(cs.DefaultDMHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
+		}
+	case CommandSourceMention:
+		if cs.DefaultMentionHandler != nil {
+			cs.CheckCommandError(cs.DefaultMentionHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
+		}
+	default:
+		if cs.DefaultHandler != nil {
+			cs.CheckCommandError(cs.DefaultHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
+		}
+	}
 }
 
 func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, m *discordgo.MessageCreate) (cmdStr string, mention bool, ok bool) {
