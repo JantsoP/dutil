@@ -1,41 +1,34 @@
 package commandsystem
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil"
+	"reflect"
 	"time"
 )
 
-type CommandResponse interface {
+type Response interface {
 	// Channel, session, command etc can all be found in this context
-	Send(ctx context.Context) ([]*discordgo.Message, error)
+	Send(data *ExecData) ([]*discordgo.Message, error)
 }
 
-func SendResponseInterface(ctx context.Context, reply interface{}) ([]*discordgo.Message, error) {
-	s := CtxSession(ctx)
-	c := CtxChannel(ctx)
+func SendResponseInterface(data *ExecData, reply interface{}) ([]*discordgo.Message, error) {
+
 	switch t := reply.(type) {
-	case CommandResponse:
-		return t.Send(ctx)
+	case Response:
+		return t.Send(data)
 	case string:
-		return dutil.SplitSendMessage(s, c.ID, t)
+		return dutil.SplitSendMessage(data.Session, data.Channel.ID, t)
 	case error:
-		return dutil.SplitSendMessage(s, c.ID, t.Error())
+		return dutil.SplitSendMessage(data.Session, data.Channel.ID, t.Error())
 	case *discordgo.MessageEmbed:
-		m, err := s.ChannelMessageSendEmbed(c.ID, t)
+		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID, t)
 		return []*discordgo.Message{m}, err
 	}
 
-	cmd := ctx.Value(KeyCommand)
-	cmdName := "?"
-	if cmd != nil {
-		cmdName = cmd.(*Command).Name
-	}
-
-	return nil, errors.New("Unknown reply type in '" + cmdName + "'")
+	return nil, errors.New("Unknown reply type: " + reflect.TypeOf(reply).String() + " (Does not implement Response)")
 }
 
 // Temporary response deletes the inner response after Duration
@@ -51,14 +44,13 @@ func NewTemporaryResponse(d time.Duration, inner interface{}) *TemporaryResponse
 	}
 }
 
-func (t *TemporaryResponse) Send(ctx context.Context) ([]*discordgo.Message, error) {
-	session := CtxSession(ctx)
-	channel := CtxChannel(ctx)
+func (t *TemporaryResponse) Send(data *ExecData) ([]*discordgo.Message, error) {
 
-	msgs, err := SendResponseInterface(ctx, t.Response)
+	msgs, err := SendResponseInterface(data, t.Response)
 	if err != nil {
 		return nil, err
 	}
+
 	time.AfterFunc(t.Duration, func() {
 		// do a bulk if 2 or more
 		if len(msgs) > 1 {
@@ -66,9 +58,9 @@ func (t *TemporaryResponse) Send(ctx context.Context) ([]*discordgo.Message, err
 			for i, m := range msgs {
 				ids[i] = m.ID
 			}
-			session.ChannelMessagesBulkDelete(channel.ID, ids)
+			data.Session.ChannelMessagesBulkDelete(data.Channel.ID, ids)
 		} else {
-			session.ChannelMessageDelete(channel.ID, msgs[0].ID)
+			data.Session.ChannelMessageDelete(data.Channel.ID, msgs[0].ID)
 		}
 	})
 	return msgs, nil
@@ -80,17 +72,15 @@ type FallbackEmebd struct {
 	*discordgo.MessageEmbed
 }
 
-func (fe *FallbackEmebd) Send(ctx context.Context) ([]*discordgo.Message, error) {
-	session := CtxSession(ctx)
-	channel := CtxChannel(ctx)
+func (fe *FallbackEmebd) Send(data *ExecData) ([]*discordgo.Message, error) {
 
-	channelPerms, err := session.State.UserChannelPermissions(session.State.User.ID, channel.ID)
+	channelPerms, err := data.Session.State.UserChannelPermissions(data.Session.State.User.ID, data.Channel.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	if channelPerms&discordgo.PermissionEmbedLinks != 0 {
-		m, err := session.ChannelMessageSendEmbed(channel.ID, fe.MessageEmbed)
+		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID, fe.MessageEmbed)
 		if err != nil {
 			return nil, err
 		}
@@ -98,8 +88,8 @@ func (fe *FallbackEmebd) Send(ctx context.Context) ([]*discordgo.Message, error)
 		return []*discordgo.Message{m}, nil
 	}
 
-	content := StringEmbed(fe.MessageEmbed) + "\n**I have no 'embed links' permissions here, this is a fallback. it looks prettier if i have that perm :)**"
-	return dutil.SplitSendMessage(session, channel.ID, content)
+	content := StringEmbed(fe.MessageEmbed) + "\n*I have no 'embed links' permissions here, this is a fallback. it looks prettier if i have that perm :)*"
+	return dutil.SplitSendMessage(data.Session, data.Channel.ID, content)
 }
 
 func StringEmbed(embed *discordgo.MessageEmbed) string {

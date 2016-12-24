@@ -8,13 +8,13 @@ import (
 	"strings"
 )
 
-type CommandSource int
+type Source int
 
 const (
-	CommandSourceMention CommandSource = iota // Command triggered by mention
-	CommandSourcePrefix                       // Command triggered by prefix
-	CommandSourceDM                           // Command in a direct message
-	CommandSourceHelp                         // Triggered by help, to check if its matched if a specific command was asked for
+	SourceMention Source = iota // Command triggered by mention
+	SourcePrefix                // Command triggered by prefix
+	SourceDM                    // Command in a direct message
+	SourceHelp                  // Triggered by help, to check if its matched if a specific command was asked for
 )
 
 type System struct {
@@ -96,13 +96,13 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 		return
 	}
 
-	var source CommandSource
+	var source Source
 	if mention {
-		source = CommandSourceMention
+		source = SourceMention
 	} else if channel.IsPrivate {
-		source = CommandSourceDM
+		source = SourceDM
 	} else {
-		source = CommandSourcePrefix
+		source = SourcePrefix
 	}
 
 	// Check if any additional fields were provided to the command, if not just run the default command if possible
@@ -128,13 +128,13 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 }
 
 // Trigger the default handler for the appropiate source
-func (cs *System) triggerDefaultHandler(cmdStr string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) {
+func (cs *System) triggerDefaultHandler(cmdStr string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) {
 	switch source {
-	case CommandSourceDM:
+	case SourceDM:
 		if cs.DefaultDMHandler != nil {
 			cs.CheckCommandError(cs.DefaultDMHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
 		}
-	case CommandSourceMention:
+	case SourceMention:
 		if cs.DefaultMentionHandler != nil {
 			cs.CheckCommandError(cs.DefaultMentionHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
 		}

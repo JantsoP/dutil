@@ -77,7 +77,7 @@ func (cc *CommandContainer) ContainerHelp(depth int) string {
 	return fmt.Sprintf("%s"+fmtName+"=%-20s : %s", Indent(depth), cc.Name, aliasesStr, cc.Description)
 }
 
-func (cc *CommandContainer) CheckMatch(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (cc *CommandContainer) CheckMatch(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) bool {
 	fields := strings.SplitN(raw, " ", 2)
 	if strings.EqualFold(fields[0], cc.Name) {
 		return true
@@ -92,7 +92,7 @@ func (cc *CommandContainer) CheckMatch(raw string, source CommandSource, m *disc
 	return false
 }
 
-func (cc *CommandContainer) HandleCommand(raw string, source CommandSource, m *discordgo.MessageCreate, s *discordgo.Session) error {
+func (cc *CommandContainer) HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) error {
 	split := strings.SplitN(raw, " ", 2)
 
 	found := false

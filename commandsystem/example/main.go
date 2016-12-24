@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil/commandsystem"
@@ -35,17 +34,17 @@ func main() {
 		Arguments: []*commandsystem.ArgDef{
 			&commandsystem.ArgDef{Name: "Extra stuff", Type: commandsystem.ArgumentString, Default: "Nothing"},
 		},
-		Run: func(ctx context.Context) (interface{}, error) {
-			return "You called this from from a direct messageand no command matched! Extra stuff: " + commandsystem.CtxArgs(ctx)[0].Str(), nil
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			return "You called this from from a direct message and no command matched! Extra stuff: " + data.Args[0].Str(), nil
 		},
 	}
 	system.DefaultMentionHandler = &commandsystem.Command{
-		Run: func(ctx context.Context) (interface{}, error) {
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
 			return "You mentioned the bot and no command was found!", nil
 		},
 	}
 	system.DefaultHandler = &commandsystem.Command{
-		Run: func(ctx context.Context) (interface{}, error) {
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
 			return "You used the prefix but no command was found!", nil
 		},
 	}
@@ -78,8 +77,8 @@ func Addcommands(system *commandsystem.System) {
 			&commandsystem.ArgDef{Name: "what", Type: commandsystem.ArgumentString},
 		},
 		RequiredArgs: 1,
-		Run: func(ctx context.Context) (interface{}, error) {
-			return commandsystem.CtxArgs(ctx)[0].Str(), nil
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			return data.Args[0].Str(), nil
 		},
 	}
 
@@ -88,14 +87,14 @@ func Addcommands(system *commandsystem.System) {
 			Name:            "Hey",
 			Description:     "Nice greeting",
 			LongDescription: "This long description will only be shown when you do '!help hey'\nIt's nice to use for indepth examples and whatnot",
-			Run: func(ctx context.Context) (interface{}, error) {
+			Run: func(data *commandsystem.ExecData) (interface{}, error) {
 				return "Hello there, how was your day?", nil
 			},
 		},
 		&commandsystem.Command{
 			Name:        "How",
 			Description: "What is this computer code thing what am doign halp",
-			Run: func(ctx context.Context) (interface{}, error) {
+			Run: func(data *commandsystem.ExecData) (interface{}, error) {
 				return "How is this working?", nil
 			},
 		},
@@ -112,7 +111,7 @@ func Addcommands(system *commandsystem.System) {
 		Name:        "Invite",
 		Description: "Responds with a bot invite",
 		RunInDm:     true,
-		Run: func(ctx context.Context) (interface{}, error) {
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
 			return "You smell bad https://discordapp.com/oauth2/authorize?client_id=&scope=bot&permissions=101376", nil
 		},
 	}
@@ -121,11 +120,11 @@ func Addcommands(system *commandsystem.System) {
 		Name:        "Help",
 		Description: "Shows help abut all or one specific command",
 		Arguments: []*commandsystem.ArgDef{
-			// Set default to be not nil, so that the parsed command is always not nil
+			// Set default to be not nil when no command is specified, so that the parsed command is always not nil
 			&commandsystem.ArgDef{Name: "command", Type: commandsystem.ArgumentString, Default: ""},
 		},
-		Run: func(ctx context.Context) (interface{}, error) {
-			target := commandsystem.CtxArgs(ctx)[0].Str()
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			target := data.Args[0].Str()
 
 			// Second argument is depth, how many nested command contains the help generation will go into
 			help := system.GenerateHelp(target, 100)
