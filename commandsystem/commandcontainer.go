@@ -2,7 +2,7 @@ package commandsystem
 
 import (
 	"fmt"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"strings"
 )
 

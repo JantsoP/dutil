@@ -1,7 +1,7 @@
 package commandsystem
 
 import (
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil"
 	"log"
 	"runtime/debug"

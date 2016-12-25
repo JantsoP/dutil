@@ -3,7 +3,7 @@ package commandsystem
 import (
 	"errors"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"strconv"
 	"strings"
 )
