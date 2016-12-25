@@ -2,7 +2,7 @@ package dstate
 
 import (
 	"fmt"
-	"github.com/jonas747/discordgo"
+	"github.com/bwmarrin/discordgo"
 	"testing"
 )
 
