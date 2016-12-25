@@ -9,15 +9,12 @@ import (
 
 var (
 	flagToken string
-	dgo       *discordgo.Session
 )
 
 func init() {
 	flag.StringVar(&flagToken, "t", "", "Token to use")
 
-	if !flag.Parsed() {
-		flag.Parse()
-	}
+	flag.Parse()
 }
 
 func main() {
@@ -25,65 +22,80 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	dgo = session
 
-	system := commandsystem.NewSystem(session, ")")
+	// Create a new command system, this function will add a handler
+	// and set the prfix to "!"
+	system := commandsystem.NewSystem(session, "!")
 
+	// Add general commands
 	Addcommands(system)
 
-	dgo.AddHandler(HandleMessageCreate)
-	dgo.AddHandler(HandleReady)
-	dgo.AddHandler(HandleServerJoin)
-
-	err = dgo.Open()
-	if err != nil {
-		panic(err)
+	system.DefaultDMHandler = &commandsystem.Command{
+		Arguments: []*commandsystem.ArgDef{
+			&commandsystem.ArgDef{Name: "Extra stuff", Type: commandsystem.ArgumentString, Default: "Nothing"},
+		},
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			return "You called this from from a direct message and no command matched! Extra stuff: " + data.Args[0].Str(), nil
+		},
 	}
-	log.Println("Started example bot :D")
+	system.DefaultMentionHandler = &commandsystem.Command{
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			return "You mentioned the bot and no command was found!", nil
+		},
+	}
+	system.DefaultHandler = &commandsystem.Command{
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			return "You used the prefix but no command was found!", nil
+		},
+	}
+
+	session.AddHandler(HandleReady)
+	session.AddHandler(HandleServerJoin)
+
+	err = session.Open()
+	if err != nil {
+		log.Fatal("Failed opening websocket connection")
+	}
+
+	log.Println("Started example bot :D stop with ctrl-c")
 	select {}
 }
 
 func HandleReady(s *discordgo.Session, r *discordgo.Ready) {
-	log.Println("Ready received! Connected to", len(s.State.Guilds), "Guilds")
+	log.Println("Ready received! Connected to", len(r.Guilds), "Guilds")
 }
 
 func HandleServerJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 	log.Println("Joined guild", g.Name, " Connected to", len(s.State.Guilds), "Guilds")
 }
 
-func HandleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-
-}
-
 func Addcommands(system *commandsystem.System) {
-	echoCmd := &commandsystem.SimpleCommand{
+	echoCmd := &commandsystem.Command{
 		Name:        "Echo",
 		Description: "Christmas is coming soon",
-		Arguments: []*commandsystem.ArgumentDef{
-			&commandsystem.ArgumentDef{Name: "what", Type: commandsystem.ArgumentTypeString},
+		Arguments: []*commandsystem.ArgDef{
+			&commandsystem.ArgDef{Name: "what", Type: commandsystem.ArgumentString},
 		},
 		RequiredArgs: 1,
-		RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
-			dgo.ChannelMessageSend(m.ChannelID, cmd.Args[0].Str())
-			return nil
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			return data.Args[0].Str(), nil
 		},
 	}
 
 	funcCommands := []commandsystem.CommandHandler{
-		&commandsystem.SimpleCommand{
-			Name:        "Hey",
-			Description: "Nice greeting",
-			RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
-				dgo.ChannelMessageSend(m.ChannelID, "Wassup")
-				return nil
+		&commandsystem.Command{
+			Name:            "Hey",
+			Description:     "Nice greeting",
+			LongDescription: "This long description will only be shown when you do '!help hey'\nIt's nice to use for indepth examples and whatnot",
+			Run: func(data *commandsystem.ExecData) (interface{}, error) {
+				return "Hello there, how was your day?", nil
 			},
 		},
-		&commandsystem.SimpleCommand{
+		&commandsystem.Command{
 			Name:        "How",
 			Description: "What is this computer code thing what am doign halp",
-			RunFunc: func(cmd *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
-				dgo.ChannelMessageSend(m.ChannelID, "Wassup")
-				return nil
+			Run: func(data *commandsystem.ExecData) (interface{}, error) {
+				return "How is this working?", nil
 			},
 		},
 		&commandsystem.CommandContainer{
@@ -95,34 +107,38 @@ func Addcommands(system *commandsystem.System) {
 		},
 	}
 
-	cmdInvite := &commandsystem.SimpleCommand{
+	cmdInvite := &commandsystem.Command{
 		Name:        "Invite",
 		Description: "Responds with a bot invite",
 		RunInDm:     true,
-		RunFunc: func(parsed *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
-			dgo.ChannelMessageSend(m.ChannelID, "You smell bad https://discordapp.com/oauth2/authorize?client_id=&scope=bot&permissions=101376")
-			return nil
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			return "You smell bad https://discordapp.com/oauth2/authorize?client_id=&scope=bot&permissions=101376", nil
 		},
 	}
 
-	helpCmd := &commandsystem.SimpleCommand{
+	helpCmd := &commandsystem.Command{
 		Name:        "Help",
 		Description: "Shows help abut all or one specific command",
-		Arguments: []*commandsystem.ArgumentDef{
-			&commandsystem.ArgumentDef{Name: "command", Type: commandsystem.ArgumentTypeString},
+		Arguments: []*commandsystem.ArgDef{
+			// Set default to be not nil when no command is specified, so that the parsed command is always not nil
+			&commandsystem.ArgDef{Name: "command", Type: commandsystem.ArgumentString, Default: ""},
 		},
-		RunFunc: func(parsed *commandsystem.ParsedCommand, m *discordgo.MessageCreate) error {
-			target := ""
-			if parsed.Args[0] != nil {
-				target = parsed.Args[0].Str()
-			}
+		Run: func(data *commandsystem.ExecData) (interface{}, error) {
+			target := data.Args[0].Str()
+
+			// Second argument is depth, how many nested command contains the help generation will go into
 			help := system.GenerateHelp(target, 100)
-			dgo.ChannelMessageSend(m.ChannelID, help)
-			return nil
+
+			return help, nil
 		},
 	}
 
 	commands := []commandsystem.CommandHandler{
+		// The commands in this container can be ran using
+		// !fun (command name)
+		// funCommands also holds another command container with echo inside
+		// to call that echo command you would have to do
+		// !fun nested echo this will be echoed back
 		&commandsystem.CommandContainer{
 			Name:        "Fun",
 			Description: "Fun container",
