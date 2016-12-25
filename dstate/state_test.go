@@ -182,32 +182,32 @@ func BenchmarkMessageCreateParallelMultiGuild100(b *testing.B) {
 	})
 }
 
-func BenchmarkDGOStateMessageCreatePalellMultiGuild100(b *testing.B) {
-	s := discordgo.NewState()
-	s.MaxMessageCount = 100
+// func BenchmarkDGOStateMessageCreatePalellMultiGuild100(b *testing.B) {
+// 	s := discordgo.NewState()
+// 	s.MaxMessageCount = 100
 
-	for i := 0; i < 100; i++ {
-		g := &discordgo.Guild{
-			ID: fmt.Sprintf("g%d", i),
-			Channels: []*discordgo.Channel{
-				&discordgo.Channel{ID: fmt.Sprint(i), Name: fmt.Sprint(i)},
-			},
-		}
-		s.OnInterface(nil, &discordgo.GuildCreate{g})
-	}
+// 	for i := 0; i < 100; i++ {
+// 		g := &discordgo.Guild{
+// 			ID: fmt.Sprintf("g%d", i),
+// 			Channels: []*discordgo.Channel{
+// 				&discordgo.Channel{ID: fmt.Sprint(i), Name: fmt.Sprint(i)},
+// 			},
+// 		}
+// 		s.OnInterface(nil, &discordgo.GuildCreate{g})
+// 	}
 
-	idMap := genStringIdMap(b.N)
+// 	idMap := genStringIdMap(b.N)
 
-	b.ResetTimer()
+// 	b.ResetTimer()
 
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			msgEvt := &discordgo.MessageCreate{
-				Message: createTestMessage(idMap[i], idMap[i%100], "Hello there buddy"),
-			}
-			s.OnInterface(nil, msgEvt)
-			i++
-		}
-	})
-}
+// 	b.RunParallel(func(pb *testing.PB) {
+// 		i := 0
+// 		for pb.Next() {
+// 			msgEvt := &discordgo.MessageCreate{
+// 				Message: createTestMessage(idMap[i], idMap[i%100], "Hello there buddy"),
+// 			}
+// 			s.OnInterface(nil, msgEvt)
+// 			i++
+// 		}
+// 	})
+// }

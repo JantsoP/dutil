@@ -150,7 +150,7 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 	}
 
 	// No need to lock it since we just created it and theres no chance of anyone else accessing it
-	guildState := NewGuildState(g, s.MaxChannelMessages, s.MaxMessageAge, s.RemoveDeletedMessages)
+	guildState := NewGuildState(g, s)
 	for _, channel := range guildState.Channels {
 		if preserved, ok := preservedMessages[channel.Channel.ID]; ok {
 			channel.Messages = preserved

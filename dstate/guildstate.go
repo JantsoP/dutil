@@ -18,16 +18,23 @@ type GuildState struct {
 	maxMessages           int           // Absolute max number of messages cached in a channel
 	maxMessageDuration    time.Duration // Max age of messages, if 0 ignored. (Only checks age whena new message is received on the channel)
 	removeDeletedMessages bool
+	removeOfflineMembers  bool
 }
 
-func NewGuildState(guild *discordgo.Guild, maxMessages int, maxMessageDuration time.Duration, removeDeletedMessages bool) *GuildState {
+// NewGuildstate creates a new guild state, it only uses the passed state to get settings from
+// Pass nil to use default settings
+func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
 	guildState := &GuildState{
-		Guild:                 guild,
-		Members:               make(map[string]*MemberState),
-		Channels:              make(map[string]*ChannelState),
-		maxMessages:           maxMessages,
-		maxMessageDuration:    maxMessageDuration,
-		removeDeletedMessages: removeDeletedMessages,
+		Guild:    guild,
+		Members:  make(map[string]*MemberState),
+		Channels: make(map[string]*ChannelState),
+	}
+
+	if state != nil {
+		guildState.maxMessages = state.MaxChannelMessages
+		guildState.maxMessageDuration = state.MaxMessageAge
+		guildState.removeDeletedMessages = state.RemoveDeletedMessages
+		guildState.removeOfflineMembers = state.RemoveOfflineMembers
 	}
 
 	for _, channel := range guild.Channels {
@@ -71,6 +78,15 @@ func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	}
 
 	*g.Guild = *newGuild
+}
+
+func (g *GuildState) Member(lock bool, id string) *MemberState {
+	if lock {
+		g.RLock()
+		defer g.RUnlock()
+	}
+
+	return g.Members[id]
 }
 
 func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
@@ -136,6 +152,21 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 		g.Members[newPresence.User.ID] = &MemberState{
 			Presence: newPresence,
 		}
+	}
+
+	if newPresence.Status == discordgo.StatusOffline && g.removeOfflineMembers {
+		// Remove after a minute incase they just restart the client or something
+		time.AfterFunc(time.Minute, func() {
+			g.Lock()
+			defer g.Unlock()
+
+			member := g.Member(false, newPresence.User.ID)
+			if member != nil {
+				if member.Presence == nil || member.Presence.Status == discordgo.StatusOffline {
+					g.MemberRemove(false, newPresence.User.ID)
+				}
+			}
+		})
 	}
 }
 
