@@ -248,9 +248,6 @@ func (s *State) User(lock bool) *discordgo.SelfUser {
 }
 
 func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
-	if s.Debug {
-		log.Println("Handling event", i)
-	}
 
 	switch evt := i.(type) {
 
@@ -428,6 +425,11 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 		}
 	case *discordgo.Ready:
 		s.HandleReady(evt)
+	default:
+		return
 	}
 
+	if s.Debug {
+		log.Println("Handled event", i)
+	}
 }
