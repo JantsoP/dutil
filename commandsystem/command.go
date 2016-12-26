@@ -34,7 +34,7 @@ type CommandHandler interface {
 	CheckMatch(raw string, triggerData *TriggerData) bool
 
 	// Handle the command itself
-	HandleCommand(raw string, triggerData *TriggerData) error
+	HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) error
 
 	// Generates help output, maxDepth is how far into container help will go
 	GenerateHelp(target string, maxDepth, currentDepth int) string
@@ -169,13 +169,14 @@ func (sc *Command) CheckMatch(raw string, triggerData *TriggerData) bool {
 	return true
 }
 
-func (sc *Command) HandleCommand(raw string, triggerData *TriggerData) error {
+func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) error {
 	parsedData, err := sc.ParseCommand(raw, triggerData)
 	if err != nil {
 		triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, "Failed parsing command: "+err.Error())
 		return err
 	}
 
+	parsedData.ctx = ctx
 	parsedData.Source = triggerData.Source
 
 	if sc.Run == nil {

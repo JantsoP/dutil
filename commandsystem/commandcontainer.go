@@ -1,6 +1,7 @@
 package commandsystem
 
 import (
+	"context"
 	"fmt"
 	"github.com/jonas747/discordgo"
 	"strings"
@@ -92,14 +93,14 @@ func (cc *CommandContainer) CheckMatch(raw string, trigger *TriggerData) bool {
 	return false
 }
 
-func (cc *CommandContainer) HandleCommand(raw string, trigger *TriggerData) error {
+func (cc *CommandContainer) HandleCommand(raw string, trigger *TriggerData, ctx context.Context) error {
 	split := strings.SplitN(raw, " ", 2)
 
 	found := false
 	if len(split) > 1 {
 		for _, v := range cc.Children {
 			if v.CheckMatch(split[1], trigger) {
-				v.HandleCommand(split[1], trigger)
+				v.HandleCommand(split[1], trigger, ctx)
 				found = true
 				break
 			}
@@ -107,14 +108,14 @@ func (cc *CommandContainer) HandleCommand(raw string, trigger *TriggerData) erro
 
 		if !found {
 			if cc.NotFoundHandler != nil {
-				cc.NotFoundHandler.HandleCommand(split[1], trigger)
+				cc.NotFoundHandler.HandleCommand(split[1], trigger, ctx)
 			} else {
 				cc.SendUnknownHelp(trigger.Message, trigger.Session, split[1])
 			}
 		}
 	} else {
 		if cc.DefaultHandler != nil {
-			cc.DefaultHandler.HandleCommand("", trigger)
+			cc.DefaultHandler.HandleCommand("", trigger, ctx)
 		} else {
 			cc.SendUnknownHelp(trigger.Message, trigger.Session, "")
 		}
