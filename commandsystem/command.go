@@ -33,8 +33,8 @@ type CommandHandler interface {
 	// Called to check if the command matched "raw"
 	CheckMatch(raw string, triggerData *TriggerData) bool
 
-	// Handle the command itself
-	HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) error
+	// Handle the command itself, returns the response messages and an error if something went wrong
+	HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) ([]*discordgo.Message, error)
 
 	// Generates help output, maxDepth is how far into container help will go
 	GenerateHelp(target string, maxDepth, currentDepth int) string
@@ -169,34 +169,31 @@ func (sc *Command) CheckMatch(raw string, triggerData *TriggerData) bool {
 	return true
 }
 
-func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) error {
+func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) (msgs []*discordgo.Message, err error) {
 	parsedData, err := sc.ParseCommand(raw, triggerData)
 	if err != nil {
 		triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, "Failed parsing command: "+err.Error())
-		return err
+		return nil, err
 	}
 
 	parsedData.ctx = ctx
 	parsedData.Source = triggerData.Source
 
 	if sc.Run == nil {
-		return nil
+		return nil, nil
 	}
 
 	reply, err := sc.Run(parsedData)
 	if reply != nil {
-		_, err2 := SendResponseInterface(parsedData, reply)
+		var err2 error
+		msgs, err2 = SendResponseInterface(parsedData, reply)
 		if err2 != nil {
-			return err2
+			return msgs, err2
 		}
 	}
 
 	// Command error
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return
 }
 
 type ArgumentType int
