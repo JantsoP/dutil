@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jonas747/discordgo"
+	"github.com/jonas747/dutil/dstate"
 	"strconv"
 	"strings"
 )
@@ -12,32 +13,27 @@ import (
 // Arguments are split at space or you can put arguments inside quotes
 // You can escape both space and quotes using '\"' or '\ ' ('\\' to escape the escaping)
 // Quotes in the middle of an argument is trated as a normal character and not a seperator
-func (sc *Command) ParseCommand(raw string, m *discordgo.MessageCreate, s *discordgo.Session) (*ExecData, error) {
+func (sc *Command) ParseCommand(raw string, triggerData *TriggerData) (*ExecData, error) {
 
 	data := &ExecData{
-		Session: s,
-		Message: m.Message,
+		Session: triggerData.Session,
+		Message: triggerData.Message,
 		Command: sc,
 	}
 
 	// Retrieve guild and channel if possible (session not provided in testing)
-	var channel *discordgo.Channel
-	var guild *discordgo.Guild
-	if s != nil {
-		var err error
-		channel, err = s.State.Channel(m.ChannelID)
-		if err != nil {
-			return nil, err
-		}
+	var channel *dstate.ChannelState
+	var guild *dstate.GuildState
+
+	if triggerData.DState != nil {
+		channel = triggerData.DState.Channel(true, triggerData.Message.ChannelID)
 		data.Channel = channel
 
-		guild, err = s.State.Guild(channel.ID)
-		if err == nil {
-			data.Guild = guild
-		}
+		guild = channel.Guild
+		data.Guild = guild
 
-		s.State.RLock()
-		defer s.State.RUnlock()
+		guild.RLock()
+		defer guild.RUnlock()
 	}
 
 	// No arguments needed
@@ -122,10 +118,10 @@ func (sc *Command) ParseCommand(raw string, m *discordgo.MessageCreate, s *disco
 		case ArgumentNumber:
 			val, err = ParseNumber(buf)
 		case ArgumentUser:
-			if channel == nil || channel.IsPrivate {
+			if channel == nil || channel.Channel.IsPrivate {
 				continue // can't provide users in direct messages
 			}
-			val, err = ParseUser(buf, m.Message, guild)
+			val, err = ParseUser(buf, triggerData.Message, guild, sc.UserArgRequireMention)
 		}
 
 		if err != nil {
@@ -356,7 +352,7 @@ func ReadArgs(in string) []*MatchedArg {
 }
 
 // Parses a discord user from buf and returns the error if any
-func ParseUser(buf string, m *discordgo.Message, guild *discordgo.Guild) (user *discordgo.User, err error) {
+func ParseUser(buf string, m *discordgo.Message, guild *dstate.GuildState, requireMention bool) (user *discordgo.User, err error) {
 	field := buf
 	if strings.Index(buf, "<@") == 0 {
 		// Direct mention
@@ -372,7 +368,7 @@ func ParseUser(buf string, m *discordgo.Message, guild *discordgo.Guild) (user *
 				break
 			}
 		}
-	} else {
+	} else if !requireMention {
 		// Search for username
 		user, err = FindDiscordUser(field, m, guild)
 	}
@@ -392,14 +388,18 @@ func ParseNumber(buf string) (num float64, err error) {
 
 var ErrNotLoggedIn = errors.New("Not logged into discord")
 
-func FindDiscordUser(str string, m *discordgo.Message, guild *discordgo.Guild) (*discordgo.User, error) {
+func FindDiscordUser(str string, m *discordgo.Message, guild *dstate.GuildState) (*discordgo.User, error) {
 	if guild == nil {
 		return nil, ErrDiscordUserNotFound
 	}
 
 	for _, v := range guild.Members {
-		if strings.EqualFold(str, v.User.Username) {
-			return v.User, nil
+		if v.Member == nil {
+			continue
+		}
+
+		if strings.EqualFold(str, v.Member.User.Username) {
+			return v.Member.User, nil
 		}
 	}
 
