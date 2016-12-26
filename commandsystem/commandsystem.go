@@ -1,6 +1,7 @@
 package commandsystem
 
 import (
+	"context"
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dutil"
 	"github.com/jonas747/dutil/dstate"
@@ -126,7 +127,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	// Find a handler
 	for _, v := range cs.Commands {
 		if v.CheckMatch(commandStr, triggerData) {
-			err := v.HandleCommand(commandStr, triggerData)
+			err := v.HandleCommand(commandStr, triggerData, context.Background())
 			cs.CheckCommandError(err, m.ChannelID, s)
 			return
 		}
@@ -142,15 +143,15 @@ func (cs *System) triggerDefaultHandler(cmdStr string, trigger *TriggerData) {
 	switch trigger.Source {
 	case SourceDM:
 		if cs.DefaultDMHandler != nil {
-			cs.CheckCommandError(cs.DefaultDMHandler.HandleCommand(cmdStr, trigger), trigger.Message.ID, trigger.Session)
+			cs.CheckCommandError(cs.DefaultDMHandler.HandleCommand(cmdStr, trigger, context.Background()), trigger.Message.ID, trigger.Session)
 		}
 	case SourceMention:
 		if cs.DefaultMentionHandler != nil {
-			cs.CheckCommandError(cs.DefaultMentionHandler.HandleCommand(cmdStr, trigger), trigger.Message.ID, trigger.Session)
+			cs.CheckCommandError(cs.DefaultMentionHandler.HandleCommand(cmdStr, trigger, context.Background()), trigger.Message.ID, trigger.Session)
 		}
 	default:
 		if cs.DefaultHandler != nil {
-			cs.CheckCommandError(cs.DefaultHandler.HandleCommand(cmdStr, trigger), trigger.Message.ID, trigger.Session)
+			cs.CheckCommandError(cs.DefaultHandler.HandleCommand(cmdStr, trigger, context.Background()), trigger.Message.ID, trigger.Session)
 		}
 	}
 }
