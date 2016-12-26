@@ -31,9 +31,10 @@ func (sc *Command) ParseCommand(raw string, triggerData *TriggerData) (*ExecData
 
 		guild = channel.Guild
 		data.Guild = guild
-
-		guild.RLock()
-		defer guild.RUnlock()
+		if guild != nil {
+			guild.RLock()
+			defer guild.RUnlock()
+		}
 	}
 
 	// No arguments needed
