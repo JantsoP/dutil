@@ -80,6 +80,7 @@ func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	*g.Guild = *newGuild
 }
 
+// Member returns a the member from an id, or nil if not found
 func (g *GuildState) Member(lock bool, id string) *MemberState {
 	if lock {
 		g.RLock()
@@ -87,6 +88,61 @@ func (g *GuildState) Member(lock bool, id string) *MemberState {
 	}
 
 	return g.Members[id]
+}
+
+// MemberCopy returns a full copy of a member, or nil if not found
+// If light is true, roles will not be copied
+func (g *GuildState) MemberCopy(lock bool, id string, light bool) *discordgo.Member {
+	if lock {
+		g.RLock()
+		defer g.RUnlock()
+	}
+
+	m := g.Member(false, id)
+	if m == nil || m.Member == nil {
+		return nil
+	}
+
+	mCopy := new(discordgo.Member)
+
+	*mCopy = *m.Member
+	mCopy.Roles = nil
+	if !light {
+		for _, r := range m.Member.Roles {
+			mCopy.Roles = append(mCopy.Roles, r)
+		}
+	}
+	return mCopy
+}
+
+// ChannelCopy returns a full copy of a member, or nil if not found
+// if ligh is true, permissionoverwrites will not be copied
+func (g *GuildState) ChannelCopy(lock bool, id string, light bool) *discordgo.Channel {
+	if lock {
+		g.RLock()
+		defer g.RUnlock()
+	}
+
+	c := g.Channel(false, id)
+	if c == nil || c.Channel == nil {
+		return nil
+	}
+
+	cCopy := new(discordgo.Channel)
+	*cCopy = *c.Channel
+
+	cCopy.Messages = nil
+	cCopy.PermissionOverwrites = nil
+
+	if !light {
+		for _, pow := range c.Channel.PermissionOverwrites {
+			powCopy := new(discordgo.PermissionOverwrite)
+			*powCopy = *pow
+			cCopy.PermissionOverwrites = append(cCopy.PermissionOverwrites, pow)
+		}
+	}
+
+	return cCopy
 }
 
 func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {

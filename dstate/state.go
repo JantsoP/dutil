@@ -102,6 +102,7 @@ func (m *MessageState) ParseTimes() {
 	}
 }
 
+// Guild returns a given guilds GuildState
 func (s *State) Guild(lock bool, id string) *GuildState {
 	if lock {
 		s.RLock()
@@ -109,6 +110,38 @@ func (s *State) Guild(lock bool, id string) *GuildState {
 	}
 
 	return s.Guilds[id]
+}
+
+// LightGuildcopy returns a light copy of a guild (without any slices included)
+func (s *State) LightGuildCopy(lock bool, id string) *discordgo.Guild {
+	if lock {
+		s.RLock()
+	}
+
+	guild := s.Guild(false, id)
+	if guild == nil {
+		if lock {
+			s.RUnlock()
+		}
+		return nil
+	}
+
+	if lock {
+		s.RUnlock()
+	}
+
+	guild.RLock()
+	defer guild.RUnlock()
+
+	gCopy := new(discordgo.Guild)
+
+	*gCopy = *guild.Guild
+	gCopy.Members = nil
+	gCopy.Presences = nil
+	gCopy.Channels = nil
+	gCopy.VoiceStates = nil
+
+	return gCopy
 }
 
 func (s *State) Channel(lock bool, id string) *ChannelState {
