@@ -227,7 +227,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 }
 
 // User Returns a copy of the user from the ready event
-func (s *State) User(lock bool) *discordgo.User {
+func (s *State) User(lock bool) *discordgo.SelfUser {
 	if lock {
 		s.RLock()
 		defer s.RUnlock()
@@ -237,7 +237,7 @@ func (s *State) User(lock bool) *discordgo.User {
 		return nil
 	}
 
-	uCopy := new(discordgo.User)
+	uCopy := new(discordgo.SelfUser)
 	*uCopy = *s.r.User
 
 	return uCopy
