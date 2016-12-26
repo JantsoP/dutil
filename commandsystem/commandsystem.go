@@ -127,7 +127,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	// Find a handler
 	for _, v := range cs.Commands {
 		if v.CheckMatch(commandStr, triggerData) {
-			err := v.HandleCommand(commandStr, triggerData, context.Background())
+			_, err := v.HandleCommand(commandStr, triggerData, context.Background())
 			cs.CheckCommandError(err, m.ChannelID, s)
 			return
 		}
@@ -140,20 +140,25 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 
 // Trigger the default handler for the appropiate source
 func (cs *System) triggerDefaultHandler(cmdStr string, trigger *TriggerData) {
+
+	var err error
+
 	switch trigger.Source {
 	case SourceDM:
 		if cs.DefaultDMHandler != nil {
-			cs.CheckCommandError(cs.DefaultDMHandler.HandleCommand(cmdStr, trigger, context.Background()), trigger.Message.ID, trigger.Session)
+			_, err = cs.DefaultDMHandler.HandleCommand(cmdStr, trigger, context.Background())
 		}
 	case SourceMention:
 		if cs.DefaultMentionHandler != nil {
-			cs.CheckCommandError(cs.DefaultMentionHandler.HandleCommand(cmdStr, trigger, context.Background()), trigger.Message.ID, trigger.Session)
+			_, err = cs.DefaultMentionHandler.HandleCommand(cmdStr, trigger, context.Background())
 		}
 	default:
 		if cs.DefaultHandler != nil {
-			cs.CheckCommandError(cs.DefaultHandler.HandleCommand(cmdStr, trigger, context.Background()), trigger.Message.ID, trigger.Session)
+			_, err = cs.DefaultHandler.HandleCommand(cmdStr, trigger, context.Background())
 		}
 	}
+
+	cs.CheckCommandError(err, trigger.Message.ChannelID, trigger.Session)
 }
 
 func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, m *discordgo.MessageCreate) (cmdStr string, mention bool, ok bool) {
