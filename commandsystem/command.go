@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/dutil/dstate"
 	"strings"
 )
 
@@ -16,13 +17,24 @@ var (
 
 type CommandHandlerFunc func(raw string, m *discordgo.MessageCreate, s *discordgo.Session)
 
+type TriggerData struct {
+	Session *discordgo.Session
+
+	// Nil if dstate is not being used
+	DState *dstate.State
+
+	// Message that triggered the command or nil if none
+	Message *discordgo.Message
+	Source  Source
+}
+
 // Represents a command handler to handle commands
 type CommandHandler interface {
 	// Called to check if the command matched "raw"
-	CheckMatch(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) bool
+	CheckMatch(raw string, triggerData *TriggerData) bool
 
 	// Handle the command itself
-	HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) error
+	HandleCommand(raw string, triggerData *TriggerData) error
 
 	// Generates help output, maxDepth is how far into container help will go
 	GenerateHelp(target string, maxDepth, currentDepth int) string
@@ -81,7 +93,7 @@ type Command struct {
 
 func (sc *Command) GenerateHelp(target string, maxDepth, currentDepth int) string {
 	if target != "" {
-		if !sc.CheckMatch(target, SourceHelp, nil, nil) {
+		if !sc.CheckMatch(target, &TriggerData{Source: SourceHelp}) {
 			return ""
 		}
 	}
@@ -124,14 +136,14 @@ func (sc *Command) GenerateHelp(target string, maxDepth, currentDepth int) strin
 	return out
 }
 
-func (sc *Command) CheckMatch(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (sc *Command) CheckMatch(raw string, triggerData *TriggerData) bool {
 	// Check if this is a mention and ignore if so
-	if source == SourceMention && sc.IgnoreMentions {
+	if triggerData.Source == SourceMention && sc.IgnoreMentions {
 		return false
 	}
 
 	// Same as above with dm's
-	if source == SourceDM && !sc.RunInDm {
+	if triggerData.Source == SourceDM && !sc.RunInDm {
 		return false
 	}
 
@@ -157,22 +169,22 @@ func (sc *Command) CheckMatch(raw string, source Source, m *discordgo.MessageCre
 	return true
 }
 
-func (sc *Command) HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) error {
-	data, err := sc.ParseCommand(raw, m, s)
+func (sc *Command) HandleCommand(raw string, triggerData *TriggerData) error {
+	parsedData, err := sc.ParseCommand(raw, triggerData)
 	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, "Failed parsing command: "+err.Error())
+		triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, "Failed parsing command: "+err.Error())
 		return err
 	}
 
-	data.Source = source
+	parsedData.Source = triggerData.Source
 
 	if sc.Run == nil {
 		return nil
 	}
 
-	reply, err := sc.Run(data)
+	reply, err := sc.Run(parsedData)
 	if reply != nil {
-		_, err2 := SendResponseInterface(data, reply)
+		_, err2 := SendResponseInterface(parsedData, reply)
 		if err2 != nil {
 			return err2
 		}
@@ -254,13 +266,13 @@ type ExecData struct {
 
 	Session *discordgo.Session
 	Message *discordgo.Message
-	Guild   *discordgo.Guild
-	Channel *discordgo.Channel
+	Guild   *dstate.GuildState
+	Channel *dstate.ChannelState
 
 	ctx context.Context
 }
 
-// Returns an always non-nil context
+// Context returns an always non-nil context
 func (e *ExecData) Context() context.Context {
 	if e.ctx == nil {
 		return context.Background()
@@ -269,7 +281,7 @@ func (e *ExecData) Context() context.Context {
 	return e.ctx
 }
 
-// Returns a copy of execdata with the context
+// WithContext Returns a copy of execdata with the context similar to net/http.Request.WithContext
 func (e *ExecData) WithContext(ctx context.Context) *ExecData {
 	ne := new(ExecData)
 	*ne = *e

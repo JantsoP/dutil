@@ -77,7 +77,7 @@ func (cc *CommandContainer) ContainerHelp(depth int) string {
 	return fmt.Sprintf("%s"+fmtName+"=%-20s : %s", Indent(depth), cc.Name, aliasesStr, cc.Description)
 }
 
-func (cc *CommandContainer) CheckMatch(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (cc *CommandContainer) CheckMatch(raw string, trigger *TriggerData) bool {
 	fields := strings.SplitN(raw, " ", 2)
 	if strings.EqualFold(fields[0], cc.Name) {
 		return true
@@ -92,14 +92,14 @@ func (cc *CommandContainer) CheckMatch(raw string, source Source, m *discordgo.M
 	return false
 }
 
-func (cc *CommandContainer) HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) error {
+func (cc *CommandContainer) HandleCommand(raw string, trigger *TriggerData) error {
 	split := strings.SplitN(raw, " ", 2)
 
 	found := false
 	if len(split) > 1 {
 		for _, v := range cc.Children {
-			if v.CheckMatch(split[1], source, m, s) {
-				v.HandleCommand(split[1], source, m, s)
+			if v.CheckMatch(split[1], trigger) {
+				v.HandleCommand(split[1], trigger)
 				found = true
 				break
 			}
@@ -107,21 +107,21 @@ func (cc *CommandContainer) HandleCommand(raw string, source Source, m *discordg
 
 		if !found {
 			if cc.NotFoundHandler != nil {
-				cc.NotFoundHandler.HandleCommand(split[1], source, m, s)
+				cc.NotFoundHandler.HandleCommand(split[1], trigger)
 			} else {
-				cc.SendUnknownHelp(m, s, split[1])
+				cc.SendUnknownHelp(trigger.Message, trigger.Session, split[1])
 			}
 		}
 	} else {
 		if cc.DefaultHandler != nil {
-			cc.DefaultHandler.HandleCommand("", source, m, s)
+			cc.DefaultHandler.HandleCommand("", trigger)
 		} else {
-			cc.SendUnknownHelp(m, s, "")
+			cc.SendUnknownHelp(trigger.Message, trigger.Session, "")
 		}
 	}
 	return nil
 }
 
-func (cc *CommandContainer) SendUnknownHelp(m *discordgo.MessageCreate, s *discordgo.Session, badCmd string) {
+func (cc *CommandContainer) SendUnknownHelp(m *discordgo.Message, s *discordgo.Session, badCmd string) {
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s: Unknown subcommand (%q) D: see help for usage.", cc.Name, badCmd))
 }

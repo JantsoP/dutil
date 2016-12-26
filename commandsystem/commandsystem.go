@@ -3,6 +3,7 @@ package commandsystem
 import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dutil"
+	"github.com/jonas747/dutil/dstate"
 	"log"
 	"runtime/debug"
 	"strings"
@@ -32,6 +33,8 @@ type System struct {
 	IgnoreBots       bool // Set to ignore bots (NewSystem sets it to true)
 	SendStackOnPanic bool // Dumps the stack in a chat message when a panic happens in a command handler
 	SendError        bool // Set to send error messages that a command handler returned
+
+	State *dstate.State
 }
 
 // Returns a system with default configuration
@@ -105,42 +108,49 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 		source = SourcePrefix
 	}
 
+	triggerData := &TriggerData{
+		Session: s,
+		Message: m.Message,
+		DState:  cs.State,
+		Source:  source,
+	}
+
 	// Check if any additional fields were provided to the command, if not just run the default command if possible
 	if commandStr == "" {
 
-		cs.triggerDefaultHandler(commandStr, source, m, s)
+		cs.triggerDefaultHandler(commandStr, triggerData)
 
 		return
 	}
 
 	// Find a handler
 	for _, v := range cs.Commands {
-		if v.CheckMatch(commandStr, source, m, s) {
-			err := v.HandleCommand(commandStr, source, m, s)
+		if v.CheckMatch(commandStr, triggerData) {
+			err := v.HandleCommand(commandStr, triggerData)
 			cs.CheckCommandError(err, m.ChannelID, s)
 			return
 		}
 	}
 
 	// No handler found, check the default one
-	cs.triggerDefaultHandler(commandStr, source, m, s)
+	cs.triggerDefaultHandler(commandStr, triggerData)
 
 }
 
 // Trigger the default handler for the appropiate source
-func (cs *System) triggerDefaultHandler(cmdStr string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) {
-	switch source {
+func (cs *System) triggerDefaultHandler(cmdStr string, trigger *TriggerData) {
+	switch trigger.Source {
 	case SourceDM:
 		if cs.DefaultDMHandler != nil {
-			cs.CheckCommandError(cs.DefaultDMHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
+			cs.CheckCommandError(cs.DefaultDMHandler.HandleCommand(cmdStr, trigger), trigger.Message.ID, trigger.Session)
 		}
 	case SourceMention:
 		if cs.DefaultMentionHandler != nil {
-			cs.CheckCommandError(cs.DefaultMentionHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
+			cs.CheckCommandError(cs.DefaultMentionHandler.HandleCommand(cmdStr, trigger), trigger.Message.ID, trigger.Session)
 		}
 	default:
 		if cs.DefaultHandler != nil {
-			cs.CheckCommandError(cs.DefaultHandler.HandleCommand(cmdStr, source, m, s), m.ChannelID, s)
+			cs.CheckCommandError(cs.DefaultHandler.HandleCommand(cmdStr, trigger), trigger.Message.ID, trigger.Session)
 		}
 	}
 }
