@@ -2,6 +2,7 @@ package dstate
 
 import (
 	"github.com/bwmarrin/discordgo"
+	"log"
 	"sync"
 	"time"
 )
@@ -36,6 +37,9 @@ type State struct {
 
 	// Set to remove deleted messages from state
 	RemoveDeletedMessages bool
+
+	// Enabled debug logging
+	Debug bool
 }
 
 func NewState() *State {
@@ -244,6 +248,10 @@ func (s *State) User(lock bool) *discordgo.User {
 }
 
 func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
+	if s.Debug {
+		log.Println("Handling event", i)
+	}
+
 	switch evt := i.(type) {
 
 	// Guild events
