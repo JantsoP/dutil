@@ -266,6 +266,7 @@ type ExecData struct {
 	Message *discordgo.Message
 	Guild   *dstate.GuildState
 	Channel *dstate.ChannelState
+	State   *dstate.State
 
 	ctx context.Context
 }

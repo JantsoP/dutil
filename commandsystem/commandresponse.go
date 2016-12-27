@@ -74,7 +74,7 @@ type FallbackEmebd struct {
 
 func (fe *FallbackEmebd) Send(data *ExecData) ([]*discordgo.Message, error) {
 
-	channelPerms, err := data.Session.State.UserChannelPermissions(data.Session.State.User.ID, data.Channel.Channel.ID)
+	channelPerms, err := data.Guild.MemberPermissions(true, data.Channel.Channel.ID, data.State.User(true).ID)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ func (sc *Command) ParseCommand(raw string, triggerData *TriggerData) (*ExecData
 		Session: triggerData.Session,
 		Message: triggerData.Message,
 		Command: sc,
+		State:   triggerData.DState,
 	}
 
 	// Retrieve guild and channel if possible (session not provided in testing)
