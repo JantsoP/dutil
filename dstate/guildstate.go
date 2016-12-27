@@ -1,9 +1,15 @@
 package dstate
 
 import (
+	"errors"
 	"github.com/bwmarrin/discordgo"
 	"sync"
 	"time"
+)
+
+var (
+	ErrMemberNotFound  = errors.New("Member not found")
+	ErrChannelNotFound = errors.New("Channel not found")
 )
 
 type GuildState struct {
@@ -359,19 +365,19 @@ func (g *GuildState) VoiceStateUpdate(lock bool, update *discordgo.VoiceStateUpd
 
 // Calculates the permissions for a member.
 // https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
-func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID string) (apermissions int) {
+func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID string) (apermissions int, err error) {
 	if lock {
 		g.Lock()
 		defer g.Unlock()
 	}
 
 	if memberID == g.Guild.OwnerID {
-		return discordgo.PermissionAll
+		return discordgo.PermissionAll, nil
 	}
 
 	mState := g.Member(false, memberID)
 	if mState == nil || mState.Member == nil {
-		return 0
+		return 0, ErrMemberNotFound
 	}
 
 	for _, role := range g.Guild.Roles {
@@ -398,6 +404,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID str
 
 	cState := g.Channel(false, channelID)
 	if cState == nil {
+		err = ErrChannelNotFound
 		return
 	}
 
@@ -439,5 +446,5 @@ func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID str
 		apermissions |= discordgo.PermissionAllChannel
 	}
 
-	return apermissions
+	return
 }
