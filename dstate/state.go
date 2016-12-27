@@ -16,7 +16,8 @@ type State struct {
 	Guilds map[string]*GuildState
 
 	// Global channel mapping for convenience
-	channels map[string]*ChannelState
+	channels        map[string]*ChannelState
+	PriavteChannels map[string]*ChannelState
 
 	// Absolute max number of messages stored per channel
 	MaxChannelMessages int
@@ -123,6 +124,7 @@ func (s *State) LightGuildCopy(lock bool, id string) *discordgo.Guild {
 	return guild.LightCopy(true)
 }
 
+// Channel returns a channelstate from id
 func (s *State) Channel(lock bool, id string) *ChannelState {
 	if lock {
 		s.RLock()
@@ -132,7 +134,34 @@ func (s *State) Channel(lock bool, id string) *ChannelState {
 	return s.channels[id]
 }
 
-// Differantiate between
+// ChannelCopy returns a copy of a channel,
+// This assumes that state is not locked
+func (s *State) ChannelCopy(id string, deep bool) *discordgo.Channel {
+	s.RLock()
+
+	cState := s.Channel(false, id)
+	if cState == nil {
+		s.RUnlock()
+		return nil
+	}
+
+	shouldLock := false
+	// Belongs to a guild
+	if cState.Guild != nil {
+		s.RUnlock()
+		shouldLock = true
+	}
+
+	cCopy := cState.Copy(shouldLock, deep)
+
+	if cState.Guild == nil {
+		s.RUnlock()
+	}
+
+	return cCopy
+}
+
+// Differantiate between create and update
 func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 	if lock {
 		s.Lock()
@@ -209,9 +238,12 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 	s.r = r
 
 	for _, channel := range r.PrivateChannels {
-		s.channels[channel.ID] = &ChannelState{
+		cs := &ChannelState{
 			Channel: channel,
+			Owner:   s,
 		}
+		s.channels[channel.ID] = cs
+		s.PriavteChannels[channel.ID] = cs
 	}
 
 	for _, v := range r.Guilds {
@@ -234,6 +266,32 @@ func (s *State) User(lock bool) *discordgo.SelfUser {
 	*uCopy = *s.r.User
 
 	return uCopy
+}
+
+func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
+	if !s.TrackChannels {
+		return
+	}
+
+	var c *ChannelState
+	if !newChannel.IsPrivate {
+		g := s.Guild(true, newChannel.GuildID)
+		if g != nil {
+			c = g.ChannelAddUpdate(true, newChannel)
+		}
+	} else {
+		c = &ChannelState{
+			Channel: newChannel,
+			Owner:   s,
+		}
+	}
+
+	s.Lock()
+	s.channels[newChannel.ID] = c
+	if newChannel.IsPrivate {
+		s.PriavteChannels[newChannel.ID] = c
+	}
+	s.Unlock()
 }
 
 func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
@@ -279,37 +337,27 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 
 	// Channel events
 	case *discordgo.ChannelCreate:
-		if !s.TrackChannels {
-			return
-		}
-
-		g := s.Guild(true, evt.GuildID)
-		if g != nil {
-			c := g.ChannelAddUpdate(true, evt.Channel)
-			s.Lock()
-			s.channels[evt.Channel.ID] = c
-			s.Unlock()
-		}
+		s.ChannelAddUpdate(evt.Channel)
 	case *discordgo.ChannelUpdate:
-		if !s.TrackChannels {
-			return
-		}
-
-		g := s.Guild(true, evt.GuildID)
-		if g != nil {
-			c := g.ChannelAddUpdate(true, evt.Channel)
-			s.Lock()
-			s.channels[evt.Channel.ID] = c
-			s.Unlock()
-		}
+		s.ChannelAddUpdate(evt.Channel)
 	case *discordgo.ChannelDelete:
 		if !s.TrackChannels {
 			return
 		}
 
+		if evt.IsPrivate {
+			s.Lock()
+			defer s.Unlock()
+
+			delete(s.channels, evt.ID)
+			delete(s.PriavteChannels, evt.ID)
+			return
+		}
+
 		g := s.Guild(true, evt.GuildID)
 		if g != nil {
-			g.ChannelAddUpdate(true, evt.Channel)
+			g.ChannelRemove(true, evt.ID)
+
 			s.Lock()
 			delete(s.channels, evt.Channel.ID)
 			s.Unlock()
@@ -421,4 +469,9 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 	if s.Debug {
 		log.Println("Handled event", i)
 	}
+}
+
+type RWLocker interface {
+	RLock()
+	RUnlock()
 }
