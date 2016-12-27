@@ -86,6 +86,25 @@ func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	*g.Guild = *newGuild
 }
 
+// LightCopy returns a light copy of the inner guild (no slices)
+func (g *GuildState) LightCopy(lock bool) *discordgo.Guild {
+	if lock {
+		g.RLock()
+		defer g.RUnlock()
+	}
+
+	gCopy := new(discordgo.Guild)
+
+	*gCopy = *g.Guild
+	gCopy.Members = nil
+	gCopy.Presences = nil
+	gCopy.Channels = nil
+	gCopy.VoiceStates = nil
+	gCopy.Roles = nil
+
+	return gCopy
+}
+
 // Member returns a the member from an id, or nil if not found
 func (g *GuildState) Member(lock bool, id string) *MemberState {
 	if lock {
