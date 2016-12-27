@@ -45,8 +45,9 @@ type State struct {
 
 func NewState() *State {
 	return &State{
-		Guilds:   make(map[string]*GuildState),
-		channels: make(map[string]*ChannelState),
+		Guilds:          make(map[string]*GuildState),
+		channels:        make(map[string]*ChannelState),
+		PriavteChannels: make(map[string]*ChannelState),
 
 		TrackChannels:         true,
 		TrackMembers:          true,
