@@ -356,3 +356,88 @@ func (g *GuildState) VoiceStateUpdate(lock bool, update *discordgo.VoiceStateUpd
 
 	return
 }
+
+// Calculates the permissions for a member.
+// https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
+func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID string) (apermissions int) {
+	if lock {
+		g.Lock()
+		defer g.Unlock()
+	}
+
+	if memberID == g.Guild.OwnerID {
+		return discordgo.PermissionAll
+	}
+
+	mState := g.Member(false, memberID)
+	if mState == nil || mState.Member == nil {
+		return 0
+	}
+
+	for _, role := range g.Guild.Roles {
+		if role.ID == g.Guild.ID {
+			apermissions |= role.Permissions
+			break
+		}
+	}
+
+	for _, role := range g.Guild.Roles {
+		for _, roleID := range mState.Member.Roles {
+			if role.ID == roleID {
+				apermissions |= role.Permissions
+				break
+			}
+		}
+	}
+
+	// Administrator bypasses channel overrides
+	if apermissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+		apermissions |= discordgo.PermissionAll
+		return
+	}
+
+	cState := g.Channel(false, channelID)
+	if cState == nil {
+		return
+	}
+
+	// Apply @everyone overrides from the channel.
+	for _, overwrite := range cState.Channel.PermissionOverwrites {
+		if g.Guild.ID == overwrite.ID {
+			apermissions &= ^overwrite.Deny
+			apermissions |= overwrite.Allow
+			break
+		}
+	}
+
+	denies := 0
+	allows := 0
+
+	// Member overwrites can override role overrides, so do two passes
+	for _, overwrite := range cState.Channel.PermissionOverwrites {
+		for _, roleID := range mState.Member.Roles {
+			if overwrite.Type == "role" && roleID == overwrite.ID {
+				denies |= overwrite.Deny
+				allows |= overwrite.Allow
+				break
+			}
+		}
+	}
+
+	apermissions &= ^denies
+	apermissions |= allows
+
+	for _, overwrite := range cState.Channel.PermissionOverwrites {
+		if overwrite.Type == "member" && overwrite.ID == memberID {
+			apermissions &= ^overwrite.Deny
+			apermissions |= overwrite.Allow
+			break
+		}
+	}
+
+	if apermissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+		apermissions |= discordgo.PermissionAllChannel
+	}
+
+	return apermissions
+}
