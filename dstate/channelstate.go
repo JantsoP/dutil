@@ -87,10 +87,16 @@ func (c *ChannelState) MessageAddUpdate(msg *discordgo.Message, maxMessages int,
 		}
 		existing.ParseTimes()
 	} else {
+		// make a copy
+		// No need to copy author aswell as that isnt mutated
+		msgCopy := new(discordgo.Message)
+		*msgCopy = *msg
+
 		// Add the new one
 		ms := &MessageState{
-			Message: msg,
+			Message: msgCopy,
 		}
+
 		ms.ParseTimes()
 		c.Messages = append(c.Messages, ms)
 		if len(c.Messages) > maxMessages {
