@@ -140,9 +140,9 @@ func (g *GuildState) MemberCopy(lock bool, id string, light bool) *discordgo.Mem
 	return mCopy
 }
 
-// ChannelCopy returns a full copy of a member, or nil if not found
-// if ligh is true, permissionoverwrites will not be copied
-func (g *GuildState) ChannelCopy(lock bool, id string, light bool) *discordgo.Channel {
+// ChannelCopy returns a copy of a channel
+// if deep is true, permissionoverwrites will be copied
+func (g *GuildState) ChannelCopy(lock bool, id string, deep bool) *discordgo.Channel {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -153,21 +153,7 @@ func (g *GuildState) ChannelCopy(lock bool, id string, light bool) *discordgo.Ch
 		return nil
 	}
 
-	cCopy := new(discordgo.Channel)
-	*cCopy = *c.Channel
-
-	cCopy.Messages = nil
-	cCopy.PermissionOverwrites = nil
-
-	if !light {
-		for _, pow := range c.Channel.PermissionOverwrites {
-			powCopy := new(discordgo.PermissionOverwrite)
-			*powCopy = *pow
-			cCopy.PermissionOverwrites = append(cCopy.PermissionOverwrites, pow)
-		}
-	}
-
-	return cCopy
+	return c.Copy(false, deep)
 }
 
 func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
@@ -269,13 +255,7 @@ func (g *GuildState) ChannelAddUpdate(lock bool, newChannel *discordgo.Channel) 
 	existing, ok := g.Channels[newChannel.ID]
 	if ok {
 		// Patch
-		if newChannel.PermissionOverwrites == nil {
-			newChannel.PermissionOverwrites = existing.Channel.PermissionOverwrites
-		}
-		if newChannel.IsPrivate && newChannel.Recipient == nil {
-			newChannel.Recipient = existing.Channel.Recipient
-		}
-		*existing.Channel = *newChannel
+		existing.Update(newChannel)
 		return existing
 	}
 
@@ -283,6 +263,7 @@ func (g *GuildState) ChannelAddUpdate(lock bool, newChannel *discordgo.Channel) 
 		Channel:  newChannel,
 		Messages: make([]*MessageState, 0),
 		Guild:    g,
+		Owner:    g,
 	}
 
 	g.Channels[newChannel.ID] = state
