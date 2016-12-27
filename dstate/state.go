@@ -120,18 +120,7 @@ func (s *State) LightGuildCopy(lock bool, id string) *discordgo.Guild {
 		s.RUnlock()
 	}
 
-	guild.RLock()
-	defer guild.RUnlock()
-
-	gCopy := new(discordgo.Guild)
-
-	*gCopy = *guild.Guild
-	gCopy.Members = nil
-	gCopy.Presences = nil
-	gCopy.Channels = nil
-	gCopy.VoiceStates = nil
-
-	return gCopy
+	return guild.LightCopy(true)
 }
 
 func (s *State) Channel(lock bool, id string) *ChannelState {
