@@ -230,10 +230,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 	s.r = r
 
 	for _, channel := range r.PrivateChannels {
-		cs := &ChannelState{
-			Channel: channel,
-			Owner:   s,
-		}
+		cs := NewChannelState(nil, &sync.RWMutex{}, channel)
 		s.channels[channel.ID] = cs
 		s.PrivateChannels[channel.ID] = cs
 	}
