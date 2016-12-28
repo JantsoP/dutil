@@ -17,7 +17,7 @@ type State struct {
 
 	// Global channel mapping for convenience
 	channels        map[string]*ChannelState
-	PriavteChannels map[string]*ChannelState
+	PrivateChannels map[string]*ChannelState
 
 	// Absolute max number of messages stored per channel
 	MaxChannelMessages int
@@ -47,7 +47,7 @@ func NewState() *State {
 	return &State{
 		Guilds:          make(map[string]*GuildState),
 		channels:        make(map[string]*ChannelState),
-		PriavteChannels: make(map[string]*ChannelState),
+		PrivateChannels: make(map[string]*ChannelState),
 
 		TrackChannels:         true,
 		TrackMembers:          true,
@@ -229,7 +229,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 			Owner:   s,
 		}
 		s.channels[channel.ID] = cs
-		s.PriavteChannels[channel.ID] = cs
+		s.PrivateChannels[channel.ID] = cs
 	}
 
 	for _, v := range r.Guilds {
@@ -278,7 +278,7 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 	s.Lock()
 	s.channels[newChannel.ID] = c
 	if newChannel.IsPrivate {
-		s.PriavteChannels[newChannel.ID] = c
+		s.PrivateChannels[newChannel.ID] = c
 	}
 	s.Unlock()
 }
@@ -293,7 +293,7 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 		defer s.Unlock()
 
 		delete(s.channels, evt.ID)
-		delete(s.PriavteChannels, evt.ID)
+		delete(s.PrivateChannels, evt.ID)
 		return
 	}
 
