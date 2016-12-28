@@ -265,8 +265,11 @@ func copyPresence(in *discordgo.Presence) *discordgo.Presence {
 	cop := new(discordgo.Presence)
 	*cop = *in
 
-	cop.Game = new(discordgo.Game)
-	*cop.Game = *in.Game
+	if in.Game != nil {
+		cop.Game = new(discordgo.Game)
+		*cop.Game = *in.Game
+	}
+
 	cop.User = new(discordgo.User)
 	*cop.User = *in.User
 
