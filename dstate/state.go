@@ -62,8 +62,14 @@ func NewState() *State {
 type MemberState struct {
 	Guild *GuildState
 
+	id string
+
 	Member   *discordgo.Member
 	Presence *discordgo.Presence
+}
+
+func (m *MemberState) ID() string {
+	return m.ID()
 }
 
 // MessageState represents the state of a message
