@@ -203,6 +203,7 @@ func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
 		}
 	} else {
 		g.Members[newMember.User.ID] = &MemberState{
+			id:     newMember.User.ID,
 			Member: newMember,
 		}
 	}
@@ -241,6 +242,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 		}
 	} else {
 		g.Members[newPresence.User.ID] = &MemberState{
+			id:       newPresence.User.ID,
 			Presence: copyPresence(newPresence),
 		}
 	}
