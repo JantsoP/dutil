@@ -416,20 +416,20 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 		}
 
 		channel.MessageRemove(true, evt.Message.ID, s.RemoveDeletedMessages)
-	// case *discordgo.MessageBulkDelete:
-	// 	channel := s.Channel(true, evt.ChannelID)
-	// 	if channel == nil {
-	// 		return
-	// 	}
-	// 	if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
-	// 		return
-	// 	}
-	// 	channel.Owner.Lock()
-	// 	defer channel.Owner.Unlock()
+	case *discordgo.MessageDeleteBulk:
+		channel := s.Channel(true, evt.ChannelID)
+		if channel == nil {
+			return
+		}
+		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+			return
+		}
+		channel.Owner.Lock()
+		defer channel.Owner.Unlock()
 
-	// 	for _, v := range evt.Messages {
-	// 		channel.MessageRemove(false, v, s.RemoveDeletedMessages)
-	// 	}
+		for _, v := range evt.Messages {
+			channel.MessageRemove(false, v, s.RemoveDeletedMessages)
+		}
 
 	// Other
 	case *discordgo.PresenceUpdate:

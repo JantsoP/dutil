@@ -227,7 +227,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 	existing, ok := g.Members[newPresence.User.ID]
 	if ok {
 		if existing.Presence == nil {
-			existing.Presence = newPresence
+			existing.Presence = copyPresence(newPresence)
 		} else {
 			// Patch
 
@@ -241,7 +241,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 		}
 	} else {
 		g.Members[newPresence.User.ID] = &MemberState{
-			Presence: newPresence,
+			Presence: copyPresence(newPresence),
 		}
 	}
 
@@ -259,6 +259,24 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 			}
 		})
 	}
+}
+
+func copyPresence(in *discordgo.Presence) *discordgo.Presence {
+	cop := new(discordgo.Presence)
+	*cop = *in
+
+	cop.Game = new(discordgo.Game)
+	*cop.Game = *in.Game
+	cop.User = new(discordgo.User)
+	*cop.User = *in.User
+
+	cop.Roles = nil
+	if in.Roles != nil {
+		cop.Roles = make([]string, len(in.Roles))
+		copy(cop.Roles, in.Roles)
+	}
+
+	return cop
 }
 
 // Channel retrieves a channelstate by id
