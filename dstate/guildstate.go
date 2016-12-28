@@ -15,6 +15,9 @@ var (
 type GuildState struct {
 	sync.RWMutex
 
+	// ID is never mutated, so can be accessed without locking
+	id string
+
 	// The underlying guild, the members and channels fields shouldnt be used
 	Guild *discordgo.Guild
 
@@ -30,7 +33,9 @@ type GuildState struct {
 // NewGuildstate creates a new guild state, it only uses the passed state to get settings from
 // Pass nil to use default settings
 func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
+
 	guildState := &GuildState{
+		id:       guild.ID,
 		Guild:    guild,
 		Members:  make(map[string]*MemberState),
 		Channels: make(map[string]*ChannelState),
@@ -58,6 +63,13 @@ func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
 	return guildState
 }
 
+// ID returns the GuildState's id
+// This requires no locking as id is never mutated
+func (g *GuildState) ID() string {
+	return g.id
+}
+
+// GuildUpdate updates the guild with new guild information
 func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	if lock {
 		g.Lock()
@@ -70,20 +82,29 @@ func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	if newGuild.Emojis == nil {
 		newGuild.Emojis = g.Guild.Emojis
 	}
-	if newGuild.Members == nil {
-		newGuild.Members = g.Guild.Members
-	}
-	if newGuild.Presences == nil {
-		newGuild.Presences = g.Guild.Presences
-	}
-	if newGuild.Channels == nil {
-		newGuild.Channels = g.Guild.Channels
-	}
 	if newGuild.VoiceStates == nil {
 		newGuild.VoiceStates = g.Guild.VoiceStates
 	}
 
+	// Create/update new channels
 	*g.Guild = *newGuild
+	for _, c := range newGuild.Channels {
+		g.ChannelAddUpdate(false, c)
+	}
+
+	// Remove removed channels
+	if newGuild.Channels != nil {
+	OUTER:
+		for _, checking := range g.Channels {
+			for _, c := range newGuild.Channels {
+				if c.ID == checking.id {
+					continue OUTER
+				}
+			}
+
+			delete(g.Channels, checking.id)
+		}
+	}
 }
 
 // LightCopy returns a light copy of the inner guild (no slices)
@@ -116,8 +137,8 @@ func (g *GuildState) Member(lock bool, id string) *MemberState {
 }
 
 // MemberCopy returns a full copy of a member, or nil if not found
-// If light is true, roles will not be copied
-func (g *GuildState) MemberCopy(lock bool, id string, light bool) *discordgo.Member {
+// If deep is true, roles will also be copied, otherwise nil
+func (g *GuildState) MemberCopy(lock bool, id string, deep bool) *discordgo.Member {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -132,7 +153,7 @@ func (g *GuildState) MemberCopy(lock bool, id string, light bool) *discordgo.Mem
 
 	*mCopy = *m.Member
 	mCopy.Roles = nil
-	if !light {
+	if deep {
 		for _, r := range m.Member.Roles {
 			mCopy.Roles = append(mCopy.Roles, r)
 		}
@@ -141,7 +162,7 @@ func (g *GuildState) MemberCopy(lock bool, id string, light bool) *discordgo.Mem
 }
 
 // ChannelCopy returns a copy of a channel
-// if deep is true, permissionoverwrites will be copied
+// if deep is true, permissionoverwrites will be copied, otherwise nil
 func (g *GuildState) ChannelCopy(lock bool, id string, deep bool) *discordgo.Channel {
 	if lock {
 		g.RLock()
@@ -156,6 +177,7 @@ func (g *GuildState) ChannelCopy(lock bool, id string, deep bool) *discordgo.Cha
 	return c.Copy(false, deep)
 }
 
+// MemberAddUpdate adds or updates a member
 func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
 	if lock {
 		g.Lock()
@@ -186,6 +208,7 @@ func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
 	}
 }
 
+// MemberRemove removes a member from the guildstate
 func (g *GuildState) MemberRemove(lock bool, id string) {
 	if lock {
 		g.Lock()
@@ -194,6 +217,7 @@ func (g *GuildState) MemberRemove(lock bool, id string) {
 	delete(g.Members, id)
 }
 
+// PresenceAddUpdate adds or updates a presence
 func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presence) {
 	if lock {
 		g.Lock()
@@ -237,6 +261,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 	}
 }
 
+// Channel retrieves a channelstate by id
 func (g *GuildState) Channel(lock bool, id string) *ChannelState {
 	if lock {
 		g.RLock()
@@ -246,6 +271,7 @@ func (g *GuildState) Channel(lock bool, id string) *ChannelState {
 	return g.Channels[id]
 }
 
+// ChannelAddUpdate adds or updates a channel in the guildstate
 func (g *GuildState) ChannelAddUpdate(lock bool, newChannel *discordgo.Channel) *ChannelState {
 	if lock {
 		g.Lock()
@@ -255,21 +281,17 @@ func (g *GuildState) ChannelAddUpdate(lock bool, newChannel *discordgo.Channel) 
 	existing, ok := g.Channels[newChannel.ID]
 	if ok {
 		// Patch
-		existing.Update(newChannel)
+		existing.Update(false, newChannel)
 		return existing
 	}
 
-	state := &ChannelState{
-		Channel:  newChannel,
-		Messages: make([]*MessageState, 0),
-		Guild:    g,
-		Owner:    g,
-	}
-
+	state := NewChannelState(g, g, newChannel)
 	g.Channels[newChannel.ID] = state
+
 	return state
 }
 
+// ChannelRemove removes a channel from the GuildState
 func (g *GuildState) ChannelRemove(lock bool, id string) {
 	if lock {
 		g.Lock()
@@ -278,6 +300,7 @@ func (g *GuildState) ChannelRemove(lock bool, id string) {
 	delete(g.Channels, id)
 }
 
+// Role returns a role by id
 func (g *GuildState) Role(lock bool, id string) *discordgo.Role {
 	if lock {
 		g.RLock()
@@ -358,7 +381,10 @@ func (g *GuildState) VoiceStateUpdate(lock bool, update *discordgo.VoiceStateUpd
 		return
 	}
 
-	g.Guild.VoiceStates = append(g.Guild.VoiceStates, update.VoiceState)
+	vsCopy := new(discordgo.VoiceState)
+	*vsCopy = *update.VoiceState
+
+	g.Guild.VoiceStates = append(g.Guild.VoiceStates, vsCopy)
 
 	return
 }

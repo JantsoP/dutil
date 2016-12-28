@@ -136,30 +136,15 @@ func (s *State) Channel(lock bool, id string) *ChannelState {
 }
 
 // ChannelCopy returns a copy of a channel,
-// This assumes that state is not locked
-func (s *State) ChannelCopy(id string, deep bool) *discordgo.Channel {
-	s.RLock()
+// lock dictates wether state should be RLocked or not, channel will be locked regardless
+func (s *State) ChannelCopy(lock bool, id string, deep bool) *discordgo.Channel {
 
-	cState := s.Channel(false, id)
+	cState := s.Channel(lock, id)
 	if cState == nil {
-		s.RUnlock()
 		return nil
 	}
 
-	shouldLock := false
-	// Belongs to a guild
-	if cState.Guild != nil {
-		s.RUnlock()
-		shouldLock = true
-	}
-
-	cCopy := cState.Copy(shouldLock, deep)
-
-	if cState.Guild == nil {
-		s.RUnlock()
-	}
-
-	return cCopy
+	return cState.Copy(true, deep)
 }
 
 // Differantiate between create and update
@@ -274,17 +259,20 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 		return
 	}
 
-	var c *ChannelState
+	c := s.Channel(true, newChannel.ID)
+	if c != nil {
+		c.Update(true, newChannel)
+		return
+	}
+
 	if !newChannel.IsPrivate {
 		g := s.Guild(true, newChannel.GuildID)
 		if g != nil {
 			c = g.ChannelAddUpdate(true, newChannel)
 		}
 	} else {
-		c = &ChannelState{
-			Channel: newChannel,
-			Owner:   s,
-		}
+		// Belongs to no guild, so we can create a new rwmutex
+		c = NewChannelState(nil, &sync.RWMutex{}, newChannel)
 	}
 
 	s.Lock()
@@ -293,6 +281,30 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 		s.PriavteChannels[newChannel.ID] = c
 	}
 	s.Unlock()
+}
+
+func (s *State) ChannelRemove(evt *discordgo.Channel) {
+	if !s.TrackChannels {
+		return
+	}
+
+	if evt.IsPrivate {
+		s.Lock()
+		defer s.Unlock()
+
+		delete(s.channels, evt.ID)
+		delete(s.PriavteChannels, evt.ID)
+		return
+	}
+
+	g := s.Guild(true, evt.GuildID)
+	if g != nil {
+		g.ChannelRemove(true, evt.ID)
+
+		s.Lock()
+		delete(s.channels, evt.ID)
+		s.Unlock()
+	}
 }
 
 func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
@@ -342,27 +354,7 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 	case *discordgo.ChannelUpdate:
 		s.ChannelAddUpdate(evt.Channel)
 	case *discordgo.ChannelDelete:
-		if !s.TrackChannels {
-			return
-		}
-
-		if evt.IsPrivate {
-			s.Lock()
-			defer s.Unlock()
-
-			delete(s.channels, evt.ID)
-			delete(s.PriavteChannels, evt.ID)
-			return
-		}
-
-		g := s.Guild(true, evt.GuildID)
-		if g != nil {
-			g.ChannelRemove(true, evt.ID)
-
-			s.Lock()
-			delete(s.channels, evt.Channel.ID)
-			s.Unlock()
-		}
+		s.ChannelRemove(evt.Channel)
 
 	// Role events
 	case *discordgo.GuildRoleCreate:
@@ -399,33 +391,21 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 		if channel == nil {
 			return
 		}
-		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+		if channel.IsPrivate() && s.ThrowAwayDMMessages {
 			return
 		}
-		if channel.Channel.IsPrivate {
-			s.Lock()
-			defer s.Unlock()
-		} else {
-			channel.Guild.Lock()
-			defer channel.Guild.Unlock()
-		}
-		channel.MessageAddUpdate(evt.Message, s.MaxChannelMessages, s.MaxMessageAge)
+
+		channel.MessageAddUpdate(true, evt.Message, s.MaxChannelMessages, s.MaxMessageAge)
 	case *discordgo.MessageUpdate:
 		channel := s.Channel(true, evt.ChannelID)
 		if channel == nil {
 			return
 		}
-		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+		if channel.IsPrivate() && s.ThrowAwayDMMessages {
 			return
 		}
-		if channel.Channel.IsPrivate {
-			s.Lock()
-			defer s.Unlock()
-		} else {
-			channel.Guild.Lock()
-			defer channel.Guild.Unlock()
-		}
-		channel.MessageAddUpdate(evt.Message, s.MaxChannelMessages, s.MaxMessageAge)
+
+		channel.MessageAddUpdate(true, evt.Message, s.MaxChannelMessages, s.MaxMessageAge)
 	case *discordgo.MessageDelete:
 		channel := s.Channel(true, evt.ChannelID)
 		if channel == nil {
@@ -434,14 +414,22 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
 			return
 		}
-		if channel.Channel.IsPrivate {
-			s.Lock()
-			defer s.Unlock()
-		} else {
-			channel.Guild.Lock()
-			defer channel.Guild.Unlock()
-		}
-		channel.MessageRemove(evt.Message.ID, !s.RemoveDeletedMessages)
+
+		channel.MessageRemove(true, evt.Message.ID, s.RemoveDeletedMessages)
+	// case *discordgo.MessageBulkDelete:
+	// 	channel := s.Channel(true, evt.ChannelID)
+	// 	if channel == nil {
+	// 		return
+	// 	}
+	// 	if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+	// 		return
+	// 	}
+	// 	channel.Owner.Lock()
+	// 	defer channel.Owner.Unlock()
+
+	// 	for _, v := range evt.Messages {
+	// 		channel.MessageRemove(false, v, s.RemoveDeletedMessages)
+	// 	}
 
 	// Other
 	case *discordgo.PresenceUpdate:
@@ -475,4 +463,6 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 type RWLocker interface {
 	RLock()
 	RUnlock()
+	Lock()
+	Unlock()
 }
