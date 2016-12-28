@@ -214,7 +214,7 @@ func (c *ChannelState) MessageAddUpdate(lock bool, msg *discordgo.Message, maxMe
 func (c *ChannelState) MessageRemove(lock bool, messageID string, mark bool) {
 	if lock {
 		c.Owner.Lock()
-		defer c.Owner.RUnlock()
+		defer c.Owner.Unlock()
 	}
 
 	for i, ms := range c.Messages {
