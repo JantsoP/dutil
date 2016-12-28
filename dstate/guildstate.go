@@ -149,14 +149,23 @@ func (g *GuildState) MemberCopy(lock bool, id string, deep bool) *discordgo.Memb
 		return nil
 	}
 
-	mCopy := new(discordgo.Member)
+	return copyMember(m.Member, deep)
+}
 
-	*mCopy = *m.Member
+func copyMember(in *discordgo.Member, deep bool) *discordgo.Member {
+
+	mCopy := new(discordgo.Member)
+	*mCopy = *in
+
+	if in.User != nil {
+		mCopy.User = new(discordgo.User)
+		*mCopy.User = *in.User
+	}
+
 	mCopy.Roles = nil
-	if deep {
-		for _, r := range m.Member.Roles {
-			mCopy.Roles = append(mCopy.Roles, r)
-		}
+	if deep && in.Roles != nil {
+		mCopy.Roles = make([]string, len(in.Roles))
+		copy(mCopy.Roles, in.Roles)
 	}
 	return mCopy
 }
@@ -187,7 +196,7 @@ func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
 	existing, ok := g.Members[newMember.User.ID]
 	if ok {
 		if existing.Member == nil {
-			existing.Member = newMember
+			existing.Member = copyMember(newMember, true)
 		} else {
 			// Patch
 			if newMember.JoinedAt != "" {
@@ -203,7 +212,9 @@ func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
 		}
 	} else {
 		g.Members[newMember.User.ID] = &MemberState{
-			Member: newMember,
+			Guild:  g,
+			id:     newMember.User.ID,
+			Member: copyMember(newMember, true),
 		}
 	}
 }
@@ -241,6 +252,8 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 		}
 	} else {
 		g.Members[newPresence.User.ID] = &MemberState{
+			Guild:    g,
+			id:       newPresence.User.ID,
 			Presence: copyPresence(newPresence),
 		}
 	}
