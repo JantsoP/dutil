@@ -69,7 +69,7 @@ type MemberState struct {
 }
 
 func (m *MemberState) ID() string {
-	return m.ID()
+	return m.id
 }
 
 // MessageState represents the state of a message
