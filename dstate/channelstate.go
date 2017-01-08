@@ -181,7 +181,7 @@ func (c *ChannelState) MessageAddUpdate(lock bool, msg *discordgo.Message, maxMe
 
 		ms.ParseTimes()
 		c.Messages = append(c.Messages, ms)
-		if len(c.Messages) > maxMessages {
+		if len(c.Messages) > maxMessages && maxMessages != -1 {
 			c.Messages = c.Messages[len(c.Messages)-maxMessages:]
 		}
 	}
