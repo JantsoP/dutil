@@ -100,6 +100,36 @@ func (m *MessageState) ParseTimes() {
 	}
 }
 
+func (m *MessageState) Copy(deep bool) *discordgo.Message {
+	mCopy := new(discordgo.Message)
+	*mCopy = *m.Message
+
+	mCopy.Author = nil
+	mCopy.Attachments = nil
+	mCopy.Embeds = nil
+	mCopy.MentionRoles = nil
+	mCopy.Mentions = nil
+	mCopy.Reactions = nil
+
+	if !deep {
+		return mCopy
+	}
+
+	if m.Message.Author != nil {
+		mCopy.Author = new(discordgo.User)
+		*mCopy.Author = *m.Message.Author
+	}
+
+	mCopy.Attachments = append(mCopy.Attachments, m.Message.Attachments...)
+	mCopy.Embeds = append(mCopy.Embeds, m.Message.Embeds...)
+	mCopy.Reactions = append(mCopy.Reactions, m.Message.Reactions...)
+
+	mCopy.MentionRoles = append(mCopy.MentionRoles, m.Message.MentionRoles...)
+	mCopy.Mentions = append(mCopy.Mentions, m.Message.Mentions...)
+
+	return mCopy
+}
+
 // Guild returns a given guilds GuildState
 func (s *State) Guild(lock bool, id string) *GuildState {
 	if lock {
