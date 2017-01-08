@@ -143,6 +143,8 @@ func (c *ChannelState) MessageAddUpdate(lock bool, msg *discordgo.Message, maxMe
 		defer c.Owner.Unlock()
 	}
 
+	defer c.UpdateMessages(false, maxMessages, maxMessageAge)
+
 	existing := c.Message(false, msg.ID)
 	if existing != nil {
 		// Patch the existing message
@@ -181,13 +183,22 @@ func (c *ChannelState) MessageAddUpdate(lock bool, msg *discordgo.Message, maxMe
 
 		ms.ParseTimes()
 		c.Messages = append(c.Messages, ms)
-		if len(c.Messages) > maxMessages && maxMessages != -1 {
-			c.Messages = c.Messages[len(c.Messages)-maxMessages:]
-		}
+	}
+}
+
+// UpdateMessages checks the messages to make sure they fit max message age and max messages
+func (c *ChannelState) UpdateMessages(lock bool, maxMsgs int, maxAge time.Duration) {
+	if lock {
+		c.Owner.Lock()
+		defer c.Owner.Unlock()
+	}
+
+	if len(c.Messages) > maxMsgs && maxMsgs != -1 {
+		c.Messages = c.Messages[len(c.Messages)-maxMsgs:]
 	}
 
 	// Check age
-	if maxMessageAge == 0 {
+	if maxAge == 0 {
 		return
 	}
 
@@ -200,7 +211,7 @@ func (c *ChannelState) MessageAddUpdate(lock bool, msg *discordgo.Message, maxMe
 			continue
 		}
 
-		if now.Sub(ts) > maxMessageAge {
+		if now.Sub(ts) > maxAge {
 			// All messages before this is old aswell
 			// TODO: remove by edited timestamp if set
 			c.Messages = c.Messages[i:]
@@ -227,4 +238,63 @@ func (c *ChannelState) MessageRemove(lock bool, messageID string, mark bool) {
 			return
 		}
 	}
+}
+
+// MessageState represents the state of a message
+type MessageState struct {
+	Message *discordgo.Message
+
+	// Set it the message was deleted
+	Deleted bool
+
+	// The parsed times below are cached because parsing all messages
+	// timestamps in state everytime a new one came in would be stupid
+	ParsedCreated time.Time
+	ParsedEdited  time.Time
+}
+
+// ParseTimes parses the created and edited timestamps
+func (m *MessageState) ParseTimes() {
+	// The discord api is stopid, and edits can come before creates
+	// Can also be handled before even if received in order cause of goroutines and scheduling
+	if m.Message.Timestamp != "" {
+		parsedC, _ := m.Message.Timestamp.Parse()
+		m.ParsedCreated = parsedC
+	}
+
+	if m.Message.EditedTimestamp != "" {
+		parsedE, _ := m.Message.EditedTimestamp.Parse()
+		m.ParsedEdited = parsedE
+	}
+}
+
+// Copy returns a copy of the message, that can be used without further locking the owner
+func (m *MessageState) Copy(deep bool) *discordgo.Message {
+	mCopy := new(discordgo.Message)
+	*mCopy = *m.Message
+
+	mCopy.Author = nil
+	mCopy.Attachments = nil
+	mCopy.Embeds = nil
+	mCopy.MentionRoles = nil
+	mCopy.Mentions = nil
+	mCopy.Reactions = nil
+
+	if !deep {
+		return mCopy
+	}
+
+	if m.Message.Author != nil {
+		mCopy.Author = new(discordgo.User)
+		*mCopy.Author = *m.Message.Author
+	}
+
+	mCopy.Attachments = append(mCopy.Attachments, m.Message.Attachments...)
+	mCopy.Embeds = append(mCopy.Embeds, m.Message.Embeds...)
+	mCopy.Reactions = append(mCopy.Reactions, m.Message.Reactions...)
+
+	mCopy.MentionRoles = append(mCopy.MentionRoles, m.Message.MentionRoles...)
+	mCopy.Mentions = append(mCopy.Mentions, m.Message.Mentions...)
+
+	return mCopy
 }

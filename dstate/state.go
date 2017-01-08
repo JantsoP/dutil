@@ -68,66 +68,9 @@ type MemberState struct {
 	Presence *discordgo.Presence
 }
 
+// ID returns the id of the member, this is safe to use without any locking as id is immutable
 func (m *MemberState) ID() string {
 	return m.id
-}
-
-// MessageState represents the state of a message
-type MessageState struct {
-	Message *discordgo.Message
-
-	// Set it the message was deleted
-	Deleted bool
-
-	// The parsed times below are cached because parsing all messages
-	// timestamps in state everytime a new one came in would be stupid
-	ParsedCreated time.Time
-	ParsedEdited  time.Time
-}
-
-// ParseTimes parses the created and edited timestamps
-func (m *MessageState) ParseTimes() {
-	// The discord api is stopid, and edits can come before creates
-	// Can also be handled before even if received in order cause of goroutines and scheduling
-	if m.Message.Timestamp != "" {
-		parsedC, _ := m.Message.Timestamp.Parse()
-		m.ParsedCreated = parsedC
-	}
-
-	if m.Message.EditedTimestamp != "" {
-		parsedE, _ := m.Message.EditedTimestamp.Parse()
-		m.ParsedEdited = parsedE
-	}
-}
-
-func (m *MessageState) Copy(deep bool) *discordgo.Message {
-	mCopy := new(discordgo.Message)
-	*mCopy = *m.Message
-
-	mCopy.Author = nil
-	mCopy.Attachments = nil
-	mCopy.Embeds = nil
-	mCopy.MentionRoles = nil
-	mCopy.Mentions = nil
-	mCopy.Reactions = nil
-
-	if !deep {
-		return mCopy
-	}
-
-	if m.Message.Author != nil {
-		mCopy.Author = new(discordgo.User)
-		*mCopy.Author = *m.Message.Author
-	}
-
-	mCopy.Attachments = append(mCopy.Attachments, m.Message.Attachments...)
-	mCopy.Embeds = append(mCopy.Embeds, m.Message.Embeds...)
-	mCopy.Reactions = append(mCopy.Reactions, m.Message.Reactions...)
-
-	mCopy.MentionRoles = append(mCopy.MentionRoles, m.Message.MentionRoles...)
-	mCopy.Mentions = append(mCopy.Mentions, m.Message.Mentions...)
-
-	return mCopy
 }
 
 // Guild returns a given guilds GuildState
