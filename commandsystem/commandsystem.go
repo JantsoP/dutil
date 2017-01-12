@@ -66,18 +66,22 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 		return // Can't handle message if we don't know our id
 	}
 
+	didMatch := false
+
 	// Catch panics so that panics in command handlers does not stop the bot
 	defer func() {
 		if r := recover(); r != nil {
 			stack := string(debug.Stack())
 			log.Println("[CommandSystem]: Recovered from panic in CommandHandler:", r, "\n", m.Content, "\n", stack)
-			if cs.SendStackOnPanic {
-				_, err := dutil.SplitSendMessage(s, m.ChannelID, "Panic when handling Command! ```\n"+stack+"\n```")
-				if err != nil {
-					log.Println("[CommandSystem]: Failed sending stacktrace", err)
+			if didMatch {
+				if cs.SendStackOnPanic {
+					_, err := dutil.SplitSendMessage(s, m.ChannelID, "Panic when handling Command! ```\n"+stack+"\n```")
+					if err != nil {
+						log.Println("[CommandSystem]: Failed sending stacktrace", err)
+					}
+				} else {
+					s.ChannelMessageSend(m.ChannelID, "Bot is panicking! Contact the bot owner!")
 				}
-			} else {
-				s.ChannelMessageSend(m.ChannelID, "Bot is panicking! Contact the bot owner!")
 			}
 		}
 	}()
@@ -108,6 +112,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	// Check if any additional fields were provided to the command, if not just run the default command if possible
 	if commandStr == "" {
 
+		didMatch = true
 		cs.triggerDefaultHandler(commandStr, source, m, s)
 
 		return
@@ -116,12 +121,14 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	// Find a handler
 	for _, v := range cs.Commands {
 		if v.CheckMatch(commandStr, source, m, s) {
+			didMatch = true
 			_, err := v.HandleCommand(commandStr, source, m, s)
 			cs.CheckCommandError(err, m.ChannelID, s)
 			return
 		}
 	}
 
+	didMatch = true
 	// No handler found, check the default one
 	cs.triggerDefaultHandler(commandStr, source, m, s)
 
