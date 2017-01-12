@@ -26,13 +26,13 @@ func main() {
         },
         // Run is called when the command has been parsed without errors
         // The run function returns a reply (string, error, *MessageEmbed or CommandResponse) and an error
-        Run: func(data commandsystem.ExecData) (interface{}, error) {
+        Run: func(data *commandsystem.ExecData) (interface{}, error) {
             // Arguments are stored in the data
             // and since RequiredArgs is set to 1, it will always be available
             return data.Args[0].Str(), nil
         }
     },&commandsystem.Command{
-        Name:        "mute",
+        Name:        "Mute",
         Description: "Mutes a user",
         RequiredArgs: 1,
         Arguments: []*commandsystem.ArgDef{
@@ -43,7 +43,7 @@ func main() {
         // The run function returns a reply (string, error, *MessageEmbed or CommandResponse) and an error
         Run: func(data commandsystem.ExecData) (interface{}, error) {
             target := data.Args[0].DiscordUser()
-            duration := data.Args[0].Int()
+            duration := data.Args[1].Int()
             // ....
         }
     })
