@@ -427,8 +427,8 @@ func (g *GuildState) VoiceStateUpdate(lock bool, update *discordgo.VoiceStateUpd
 // https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
 func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID string) (apermissions int, err error) {
 	if lock {
-		g.Lock()
-		defer g.Unlock()
+		g.RLock()
+		defer g.RUnlock()
 	}
 
 	if memberID == g.Guild.OwnerID {
