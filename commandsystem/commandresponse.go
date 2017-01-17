@@ -20,9 +20,15 @@ func SendResponseInterface(data *ExecData, reply interface{}) ([]*discordgo.Mess
 	case Response:
 		return t.Send(data)
 	case string:
-		return dutil.SplitSendMessage(data.Session, data.Channel.ID, t)
+		if t != "" {
+			return dutil.SplitSendMessage(data.Session, data.Channel.ID, t)
+		}
+		return []*discordgo.Message{}, nil
 	case error:
-		return dutil.SplitSendMessage(data.Session, data.Channel.ID, t.Error())
+		if t != nil {
+			return dutil.SplitSendMessage(data.Session, data.Channel.ID, t.Error())
+		}
+		return []*discordgo.Message{}, nil
 	case *discordgo.MessageEmbed:
 		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID, t)
 		return []*discordgo.Message{m}, err
