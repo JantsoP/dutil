@@ -259,7 +259,7 @@ type ExecData struct {
 	ctx context.Context
 }
 
-// Returns an always non-nil context
+// Context Returns an always non-nil context
 func (e *ExecData) Context() context.Context {
 	if e.ctx == nil {
 		return context.Background()
@@ -268,11 +268,29 @@ func (e *ExecData) Context() context.Context {
 	return e.ctx
 }
 
-// Returns a copy of execdata with the context
+// WithContext Returns a copy of execdata with the context
 func (e *ExecData) WithContext(ctx context.Context) *ExecData {
 	ne := new(ExecData)
 	*ne = *e
 	ne.ctx = ctx
 
 	return ne
+}
+
+// SafeArgString Returns either the argument or an zero value string
+func (e *ExecData) SafeArgString(index int) string {
+	if e.Args[index] == nil {
+		return ""
+	}
+
+	return e.Args[index].Str()
+}
+
+// SafeArgString Returns either the argument or an zero value int
+func (e *ExecData) SafeArgIng(index int) int {
+	if e.Args[index] == nil {
+		return 0
+	}
+
+	return e.Args[index].Int()
 }
