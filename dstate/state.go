@@ -3,6 +3,7 @@ package dstate
 import (
 	"github.com/bwmarrin/discordgo"
 	"log"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -285,6 +286,17 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 
 func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 
+	handled := false
+	if s.Debug {
+		t := reflect.Indirect(reflect.ValueOf(i)).Type()
+		defer func() {
+			if !handled {
+				log.Printf("Did not handle, or had issues with %s; %#v", t.Name(), i)
+			}
+		}()
+		log.Println("Inc event ", t.Name())
+	}
+
 	switch evt := i.(type) {
 
 	// Guild events
@@ -387,17 +399,16 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 		if channel == nil {
 			return
 		}
-		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+		if channel.IsPrivate() && s.ThrowAwayDMMessages {
 			return
 		}
-
 		channel.MessageRemove(true, evt.Message.ID, s.RemoveDeletedMessages)
 	case *discordgo.MessageDeleteBulk:
 		channel := s.Channel(true, evt.ChannelID)
 		if channel == nil {
 			return
 		}
-		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+		if channel.IsPrivate() && s.ThrowAwayDMMessages {
 			return
 		}
 		channel.Owner.Lock()
@@ -428,11 +439,15 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 	case *discordgo.Ready:
 		s.HandleReady(evt)
 	default:
+		handled = true
 		return
 	}
 
+	handled = true
+
 	if s.Debug {
-		log.Println("Handled event", i)
+		t := reflect.Indirect(reflect.ValueOf(i)).Type()
+		log.Printf("Handled event %s; %#v", t.Name(), i)
 	}
 }
 
