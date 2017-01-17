@@ -150,7 +150,7 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 		s.Unlock()
 		existing.RLock()
 		for _, channel := range existing.Channels {
-			preservedMessages[channel.Channel.ID] = channel.Messages
+			preservedMessages[channel.ID()] = channel.Messages
 			toRemove = append(toRemove, channel.ID())
 		}
 		existing.RUnlock()
