@@ -33,7 +33,6 @@ type GuildState struct {
 // NewGuildstate creates a new guild state, it only uses the passed state to get settings from
 // Pass nil to use default settings
 func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
-
 	guildState := &GuildState{
 		id:       guild.ID,
 		Guild:    guild,

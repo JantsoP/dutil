@@ -1,10 +1,16 @@
 package dstate
 
 import (
+	"errors"
 	"github.com/jonas747/discordgo"
 	"log"
+	"reflect"
 	"sync"
 	"time"
+)
+
+var (
+	ErrGuildNotFound = errors.New("Guild not found")
 )
 
 type State struct {
@@ -145,7 +151,7 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 		existing.RLock()
 		for _, channel := range existing.Channels {
 			preservedMessages[channel.Channel.ID] = channel.Messages
-			toRemove = append(toRemove, channel.Channel.ID)
+			toRemove = append(toRemove, channel.ID())
 		}
 		existing.RUnlock()
 		s.Lock()
@@ -158,11 +164,11 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 	// No need to lock it since we just created it and theres no chance of anyone else accessing it
 	guildState := NewGuildState(g, s)
 	for _, channel := range guildState.Channels {
-		if preserved, ok := preservedMessages[channel.Channel.ID]; ok {
+		if preserved, ok := preservedMessages[channel.ID()]; ok {
 			channel.Messages = preserved
 		}
 
-		s.channels[channel.Channel.ID] = channel
+		s.channels[channel.ID()] = channel
 	}
 
 	s.Guilds[g.ID] = guildState
@@ -285,6 +291,17 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 
 func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 
+	handled := false
+	if s.Debug {
+		t := reflect.Indirect(reflect.ValueOf(i)).Type()
+		defer func() {
+			if !handled {
+				log.Printf("Did not handle, or had issues with %s; %#v", t.Name(), i)
+			}
+		}()
+		log.Println("Inc event ", t.Name())
+	}
+
 	switch evt := i.(type) {
 
 	// Guild events
@@ -387,17 +404,16 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 		if channel == nil {
 			return
 		}
-		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+		if channel.IsPrivate() && s.ThrowAwayDMMessages {
 			return
 		}
-
 		channel.MessageRemove(true, evt.Message.ID, s.RemoveDeletedMessages)
 	case *discordgo.MessageDeleteBulk:
 		channel := s.Channel(true, evt.ChannelID)
 		if channel == nil {
 			return
 		}
-		if channel.Channel.IsPrivate && s.ThrowAwayDMMessages {
+		if channel.IsPrivate() && s.ThrowAwayDMMessages {
 			return
 		}
 		channel.Owner.Lock()
@@ -428,11 +444,15 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 	case *discordgo.Ready:
 		s.HandleReady(evt)
 	default:
+		handled = true
 		return
 	}
 
+	handled = true
+
 	if s.Debug {
-		log.Println("Handled event", i)
+		t := reflect.Indirect(reflect.ValueOf(i)).Type()
+		log.Printf("Handled event %s; %#v", t.Name(), i)
 	}
 }
 
