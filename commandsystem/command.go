@@ -76,8 +76,10 @@ type Command struct {
 	// Run is ran the the command has sucessfully been parsed
 	// It returns a reply and an error
 	// the reply can have a type of string, *MessageEmbed or error
-	Run func(data *ExecData) (interface{}, error)
+	Run RunFunc
 }
+
+type RunFunc func(data *ExecData) (interface{}, error)
 
 func (sc *Command) GenerateHelp(target string, maxDepth, currentDepth int) string {
 	if target != "" {
