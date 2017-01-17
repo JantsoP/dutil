@@ -1,16 +1,11 @@
 package dstate
 
 import (
-	"errors"
 	"github.com/jonas747/discordgo"
 	"log"
 	"reflect"
 	"sync"
 	"time"
-)
-
-var (
-	ErrGuildNotFound = errors.New("Guild not found")
 )
 
 type State struct {
@@ -220,7 +215,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 }
 
 // User Returns a copy of the user from the ready event
-func (s *State) User(lock bool) *discordgo.SelfUser {
+func (s *State) User(lock bool) *discordgo.User {
 	if lock {
 		s.RLock()
 		defer s.RUnlock()
@@ -230,7 +225,7 @@ func (s *State) User(lock bool) *discordgo.SelfUser {
 		return nil
 	}
 
-	uCopy := new(discordgo.SelfUser)
+	uCopy := new(discordgo.User)
 	*uCopy = *s.r.User
 
 	return uCopy
