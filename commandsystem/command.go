@@ -174,7 +174,10 @@ func (sc *Command) CheckMatch(raw string, triggerData *TriggerData) bool {
 func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) (msgs []*discordgo.Message, err error) {
 	parsedData, err := sc.ParseCommand(raw, triggerData)
 	if err != nil {
-		triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, "Failed parsing command: "+err.Error())
+		m, err2 := triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, "Failed parsing command: "+err.Error())
+		if err2 == nil {
+			return []*discordgo.Message{m}, err
+		}
 		return nil, err
 	}
 
