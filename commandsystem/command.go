@@ -301,7 +301,7 @@ func (e *ExecData) SafeArgString(index int) string {
 }
 
 // SafeArgString Returns either the argument or an zero value int
-func (e *ExecData) SafeArgIng(index int) int {
+func (e *ExecData) SafeArgInt(index int) int {
 	if e.Args[index] == nil {
 		return 0
 	}
