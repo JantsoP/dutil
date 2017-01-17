@@ -162,7 +162,10 @@ func (sc *Command) CheckMatch(raw string, source Source, m *discordgo.MessageCre
 func (sc *Command) HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) (msgs []*discordgo.Message, err error) {
 	data, err := sc.ParseCommand(raw, m, s)
 	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, "Failed parsing command: "+err.Error())
+		m, err2 := s.ChannelMessageSend(m.ChannelID, "Failed parsing command: "+err.Error())
+		if err2 == nil {
+			return []*discordgo.Message{m}, err
+		}
 		return nil, err
 	}
 
