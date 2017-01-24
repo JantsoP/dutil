@@ -83,7 +83,15 @@ func (sc *Command) ParseCommand(raw string, m *discordgo.MessageCreate, s *disco
 			if len(sc.ArgumentCombos) < 1 {
 				err := sc.ErrMissingArgs(0)
 				return nil, err
+			} else {
+				// Check if one of the combox accepts zero arguments
+				for _, combo := range sc.ArgumentCombos {
+					if len(combo) < 1 {
+						return data, nil
+					}
+				}
 			}
+
 			return nil, ErrInvalidParameters
 		}
 	}
