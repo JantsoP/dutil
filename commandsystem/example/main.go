@@ -66,7 +66,7 @@ func main() {
 
 	err = session.Open()
 	if err != nil {
-		log.Fatal("Failed opening websocket connection")
+		log.Fatal("Failed opening websocket connection", err)
 	}
 
 	log.Println("Started example bot :D stop with ctrl-c")
@@ -83,8 +83,9 @@ func HandleServerJoin(s *discordgo.Session, g *discordgo.GuildCreate) {
 
 func Addcommands(system *commandsystem.System) {
 	echoCmd := &commandsystem.Command{
-		Name:        "Echo",
-		Description: "Christmas is coming soon",
+		Name:            "Echo",
+		Description:     "Christmas is coming soon",
+		LongDescription: "Echoes back what is said after the command",
 		Arguments: []*commandsystem.ArgDef{
 			&commandsystem.ArgDef{Name: "what", Type: commandsystem.ArgumentString},
 		},

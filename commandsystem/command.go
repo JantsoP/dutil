@@ -117,15 +117,7 @@ func (sc *Command) GenerateHelp(target string, maxDepth, currentDepth int) strin
 	}
 
 	// Generate arguments
-	argsString := ""
-	for k, arg := range sc.Arguments {
-		if k < sc.RequiredArgs {
-			argsString += fmt.Sprintf(" <%s>", arg.String())
-		} else {
-			argsString += fmt.Sprintf(" (%s)", arg.String())
-		}
-	}
-
+	argsString := sc.StringArgs(target != "")
 	middle := aliasesString + argsString
 
 	// Final format
@@ -171,9 +163,43 @@ func (sc *Command) CheckMatch(raw string, triggerData *TriggerData) bool {
 	return true
 }
 
+func (sc *Command) StringArgs(detailed bool) string {
+	// Generate arguments
+	argsString := ""
+
+	if detailed && len(sc.ArgumentCombos) > 0 {
+		for k, combo := range sc.ArgumentCombos {
+			if k != 0 {
+				argsString += " or"
+			}
+			for _, comboArgID := range combo {
+				argsString += fmt.Sprintf(" <%s>", sc.Arguments[comboArgID].String())
+			}
+		}
+
+		return argsString
+	}
+
+	for k, arg := range sc.Arguments {
+		if k < sc.RequiredArgs {
+			argsString += fmt.Sprintf(" <%s>", arg.String())
+		} else {
+			argsString += fmt.Sprintf(" (%s)", arg.String())
+		}
+	}
+	return argsString
+}
+
 func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) (msgs []*discordgo.Message, err error) {
 	parsedData, err := sc.ParseCommand(raw, triggerData)
 	if err != nil {
+		messageContent := "Failed running command: " + err.Error() + "\n" + "Usage: " + sc.StringArgs(true)
+		if sc.LongDescription != "" {
+			messageContent += "\n" + sc.LongDescription
+		} else if sc.Description != "" {
+			messageContent += "\n" + sc.Description
+		}
+
 		m, err2 := triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, "Failed parsing command: "+err.Error())
 		if err2 == nil {
 			return []*discordgo.Message{m}, err
