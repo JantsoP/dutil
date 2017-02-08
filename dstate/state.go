@@ -315,7 +315,7 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 
 		g := s.Guild(true, evt.GuildID)
 		if g != nil {
-			g.MemberAddUpdate(true, evt.Member)
+			g.MemberAdd(true, evt.Member)
 		}
 	case *discordgo.GuildMemberUpdate:
 		if !s.TrackMembers {
