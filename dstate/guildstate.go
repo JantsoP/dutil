@@ -85,6 +85,9 @@ func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	if newGuild.VoiceStates == nil {
 		newGuild.VoiceStates = g.Guild.VoiceStates
 	}
+	if newGuild.MemberCount == 0 {
+		newGuild.MemberCount = g.Guild.MemberCount
+	}
 
 	// Create/update new channels
 	*g.Guild = *newGuild
@@ -219,12 +222,39 @@ func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
 	}
 }
 
+// MemberAdd adds a member to the GuildState
+// It differs from addupdate in that it first increases the membercount and then calls MemberAddUpdate
+// so it should only be called on the GuildMemberAdd event
+func (g *GuildState) MemberAdd(lock bool, newMember *discordgo.Member) {
+	if lock {
+		g.Lock()
+		defer g.Unlock()
+	}
+
+	g.Guild.MemberCount++
+	g.MemberAddUpdate(false, newMember)
+}
+
 // MemberRemove removes a member from the guildstate
+// it also decrements membercount, so only call this on the GuildMemberRemove event
+// If you wanna remove a member purely from the state, use StateRemoveMember
 func (g *GuildState) MemberRemove(lock bool, id string) {
 	if lock {
 		g.Lock()
 		defer g.Unlock()
 	}
+
+	g.Guild.MemberCount--
+	delete(g.Members, id)
+}
+
+// StateRemoveMember removes a guildmember from the state and does NOT decrement member_count
+func (g *GuildState) StateRemoveMember(lock bool, id string) {
+	if lock {
+		g.Lock()
+		defer g.Unlock()
+	}
+
 	delete(g.Members, id)
 }
 
@@ -267,7 +297,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 			member := g.Member(false, newPresence.User.ID)
 			if member != nil {
 				if member.Presence == nil || member.Presence.Status == discordgo.StatusOffline {
-					g.MemberRemove(false, newPresence.User.ID)
+					delete(g.Members, newPresence.User.ID)
 				}
 			}
 		})
