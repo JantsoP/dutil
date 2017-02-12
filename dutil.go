@@ -4,6 +4,7 @@ package dutil
 
 import (
 	"github.com/bwmarrin/discordgo"
+	"strconv"
 )
 
 // Returns all guild members in a guild
@@ -26,4 +27,51 @@ func GetAllGuildMembers(session *discordgo.Session, guilID string) ([]*discordgo
 		after = members[len(members)-1].User.ID
 	}
 	return members, nil
+}
+
+// IsRoleAbove returns wether role a is above b, checking positions first, and if they're the same
+// (both being 1, new roles always have 1 as position)
+// then it checjs by lower id
+func IsRoleAbove(a, b *discordgo.Role) bool {
+	if a.Position != b.Position {
+		return a.Position > b.Position
+	}
+
+	if a.ID == b.ID {
+		return false
+	}
+
+	pa, _ := strconv.ParseInt(a.ID, 10, 64)
+	pb, _ := strconv.ParseInt(b.ID, 10, 64)
+
+	return pa < pb
+}
+
+// Channels are a collection of Channels
+type Channels []*discordgo.Channel
+
+func (r Channels) Len() int {
+	return len(r)
+}
+
+func (r Channels) Less(i, j int) bool {
+	return r[i].Position < r[j].Position
+}
+
+func (r Channels) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
+
+type Roles []*discordgo.Role
+
+func (r Roles) Len() int {
+	return len(r)
+}
+
+func (r Roles) Less(i, j int) bool {
+	return IsRoleAbove(r[j], r[i])
+}
+
+func (r Roles) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
 }
