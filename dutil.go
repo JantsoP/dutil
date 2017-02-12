@@ -69,7 +69,7 @@ func (r Roles) Len() int {
 }
 
 func (r Roles) Less(i, j int) bool {
-	return IsRoleAbove(r[j], r[i])
+	return IsRoleAbove(r[i], r[j])
 }
 
 func (r Roles) Swap(i, j int) {
