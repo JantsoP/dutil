@@ -14,19 +14,26 @@ type Response interface {
 	Send(data *ExecData) ([]*discordgo.Message, error)
 }
 
-func SendResponseInterface(data *ExecData, reply interface{}) ([]*discordgo.Message, error) {
+func SendResponseInterface(data *ExecData, reply interface{}, escapeEveryoneMention bool) ([]*discordgo.Message, error) {
 
 	switch t := reply.(type) {
 	case Response:
 		return t.Send(data)
 	case string:
 		if t != "" {
+			if escapeEveryoneMention {
+				t = dutil.EscapeEveryoneMention(t)
+			}
 			return dutil.SplitSendMessage(data.Session, data.Channel.ID, t)
 		}
 		return []*discordgo.Message{}, nil
 	case error:
 		if t != nil {
-			return dutil.SplitSendMessage(data.Session, data.Channel.ID, t.Error())
+			m := t.Error()
+			if escapeEveryoneMention {
+				m = dutil.EscapeEveryoneMention(m)
+			}
+			return dutil.SplitSendMessage(data.Session, data.Channel.ID, m)
 		}
 		return []*discordgo.Message{}, nil
 	case *discordgo.MessageEmbed:
@@ -39,20 +46,22 @@ func SendResponseInterface(data *ExecData, reply interface{}) ([]*discordgo.Mess
 
 // Temporary response deletes the inner response after Duration
 type TemporaryResponse struct {
-	Response interface{}
-	Duration time.Duration
+	Response       interface{}
+	Duration       time.Duration
+	EscapeEveryone bool
 }
 
-func NewTemporaryResponse(d time.Duration, inner interface{}) *TemporaryResponse {
+func NewTemporaryResponse(d time.Duration, inner interface{}, escapeEveryoneMention bool) *TemporaryResponse {
 	return &TemporaryResponse{
-		Duration: d,
-		Response: inner,
+		Duration:       d,
+		Response:       inner,
+		EscapeEveryone: escapeEveryoneMention,
 	}
 }
 
 func (t *TemporaryResponse) Send(data *ExecData) ([]*discordgo.Message, error) {
 
-	msgs, err := SendResponseInterface(data, t.Response)
+	msgs, err := SendResponseInterface(data, t.Response, t.EscapeEveryone)
 	if err != nil {
 		return nil, err
 	}

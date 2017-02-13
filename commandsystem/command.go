@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/dutil"
 	"strings"
 )
 
@@ -72,6 +73,8 @@ type Command struct {
 	Arguments      []*ArgDef // Slice of argument definitions, ctx.Args will always be the same size as this slice (although the data may be nil)
 	RequiredArgs   int       // Number of reuquired arguments, ignored if combos is specified
 	ArgumentCombos [][]int   // Slice of argument pairs, will override RequiredArgs if specified
+
+	AllowEveryoneMention bool
 
 	// Run is ran the the command has sucessfully been parsed
 	// It returns a reply and an error
@@ -188,7 +191,7 @@ func (sc *Command) HandleCommand(raw string, source Source, m *discordgo.Message
 			messageContent += "\n" + sc.Description
 		}
 
-		m, err2 := s.ChannelMessageSend(m.ChannelID, messageContent)
+		m, err2 := s.ChannelMessageSend(m.ChannelID, dutil.EscapeEveryoneMention(messageContent))
 		if err2 == nil {
 			return []*discordgo.Message{m}, err
 		}
@@ -204,7 +207,7 @@ func (sc *Command) HandleCommand(raw string, source Source, m *discordgo.Message
 	reply, err := sc.Run(data)
 	if reply != nil {
 		var err2 error
-		msgs, err2 = SendResponseInterface(data, reply)
+		msgs, err2 = SendResponseInterface(data, reply, !sc.AllowEveryoneMention)
 		if err2 != nil {
 			return nil, err2
 		}

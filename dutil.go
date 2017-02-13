@@ -5,6 +5,7 @@ package dutil
 import (
 	"github.com/bwmarrin/discordgo"
 	"strconv"
+	"strings"
 )
 
 // Returns all guild members in a guild
@@ -74,4 +75,12 @@ func (r Roles) Less(i, j int) bool {
 
 func (r Roles) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
+}
+
+// EscapeEveryoneMention Escapes an everyone mention, adding a zero width space between the '@' and rest
+func EscapeEveryoneMention(in string) string {
+	const zeroSpace = "​" // <- Zero width space
+	s := strings.Replace(in, "@everyone", "@"+zeroSpace+"everyone", -1)
+	s = strings.Replace(s, "@here", "@"+zeroSpace+"here", -1)
+	return s
 }
