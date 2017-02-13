@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jonas747/discordgo"
+	"github.com/jonas747/dutil"
 	"github.com/jonas747/dutil/dstate"
 	"strings"
 )
@@ -84,6 +85,8 @@ type Command struct {
 	Arguments      []*ArgDef // Slice of argument definitions, ctx.Args will always be the same size as this slice (although the data may be nil)
 	RequiredArgs   int       // Number of reuquired arguments, ignored if combos is specified
 	ArgumentCombos [][]int   // Slice of argument pairs, will override RequiredArgs if specified
+
+	AllowEveryoneMention bool
 
 	// Run is ran the the command has sucessfully been parsed
 	// It returns a reply and an error
@@ -200,7 +203,7 @@ func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx conte
 			messageContent += "\n" + sc.Description
 		}
 
-		m, err2 := triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, "Failed parsing command: "+err.Error())
+		m, err2 := triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, dutil.EscapeEveryoneMention(messageContent))
 		if err2 == nil {
 			return []*discordgo.Message{m}, err
 		}
@@ -217,7 +220,7 @@ func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx conte
 	reply, err := sc.Run(parsedData)
 	if reply != nil {
 		var err2 error
-		msgs, err2 = SendResponseInterface(parsedData, reply)
+		msgs, err2 = SendResponseInterface(parsedData, reply, !sc.AllowEveryoneMention)
 		if err2 != nil {
 			return msgs, err2
 		}
