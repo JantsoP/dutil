@@ -184,7 +184,7 @@ func (sc *Command) StringArgs(detailed bool) string {
 func (sc *Command) HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) (msgs []*discordgo.Message, err error) {
 	data, err := sc.ParseCommand(raw, m, s)
 	if err != nil {
-		messageContent := "Failed running command: " + err.Error() + "\n" + "Usage: " + sc.StringArgs(true)
+		messageContent := "Failed running command: " + err.Error() + "\n" + "Usage: `" + sc.Name + " " + sc.StringArgs(true) + "`"
 		if sc.LongDescription != "" {
 			messageContent += "\n" + sc.LongDescription
 		} else if sc.Description != "" {
