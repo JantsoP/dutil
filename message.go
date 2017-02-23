@@ -171,7 +171,9 @@ func SplitSendMessagePS(s *discordgo.Session, channelID, message string, prefix,
 		if prefixStart || !first {
 			msg = prefix + msg
 		}
-		msg += suffix
+		if suffixEnd || len(newRest) > 0 {
+			msg += suffix
+		}
 
 		discordMessage, err := s.ChannelMessageSend(channelID, msg)
 		if err != nil {
