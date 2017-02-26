@@ -147,29 +147,7 @@ func (c *ChannelState) MessageAddUpdate(lock bool, msg *discordgo.Message, maxMe
 
 	existing := c.Message(false, msg.ID)
 	if existing != nil {
-		// Patch the existing message
-		if msg.Content != "" {
-			existing.Message.Content = msg.Content
-		}
-		if msg.EditedTimestamp != "" {
-			existing.Message.EditedTimestamp = msg.EditedTimestamp
-		}
-		if msg.Mentions != nil {
-			existing.Message.Mentions = msg.Mentions
-		}
-		if msg.Embeds != nil {
-			existing.Message.Embeds = msg.Embeds
-		}
-		if msg.Attachments != nil {
-			existing.Message.Attachments = msg.Attachments
-		}
-		if msg.Timestamp != "" {
-			existing.Message.Timestamp = msg.Timestamp
-		}
-		if msg.Author != nil {
-			existing.Message.Author = msg.Author
-		}
-		existing.ParseTimes()
+		existing.Update(msg)
 	} else {
 		// make a copy
 		// No need to copy author aswell as that isnt mutated
@@ -297,4 +275,30 @@ func (m *MessageState) Copy(deep bool) *discordgo.Message {
 	mCopy.Mentions = append(mCopy.Mentions, m.Message.Mentions...)
 
 	return mCopy
+}
+
+func (m *MessageState) Update(msg *discordgo.Message) {
+	// Patch the m message
+	if msg.Content != "" {
+		m.Message.Content = msg.Content
+	}
+	if msg.EditedTimestamp != "" {
+		m.Message.EditedTimestamp = msg.EditedTimestamp
+	}
+	if msg.Mentions != nil {
+		m.Message.Mentions = msg.Mentions
+	}
+	if msg.Embeds != nil {
+		m.Message.Embeds = msg.Embeds
+	}
+	if msg.Attachments != nil {
+		m.Message.Attachments = msg.Attachments
+	}
+	if msg.Timestamp != "" {
+		m.Message.Timestamp = msg.Timestamp
+	}
+	if msg.Author != nil {
+		m.Message.Author = msg.Author
+	}
+	m.ParseTimes()
 }
