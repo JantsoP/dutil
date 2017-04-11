@@ -210,7 +210,9 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 	}
 
 	for _, v := range r.Guilds {
-		s.GuildCreate(false, v)
+		if s.Guild(false, v.ID) == nil {
+			s.GuildCreate(false, v)
+		}
 	}
 }
 
