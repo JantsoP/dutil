@@ -59,6 +59,73 @@ func TestGuildCreate(t *testing.T) {
 	}
 }
 
+func TestSecondReady(t *testing.T) {
+	r := &discordgo.Ready{
+		Guilds: []*discordgo.Guild{
+			&discordgo.Guild{
+				ID:          "1",
+				Name:        "G 1",
+				Unavailable: true,
+			},
+		},
+	}
+
+	s := NewState()
+	s.HandleReady(r)
+
+	loadGuilds := func() {
+		for _, v := range r.Guilds {
+			g := &discordgo.Guild{
+				ID:   v.ID,
+				Name: v.Name,
+				Channels: []*discordgo.Channel{
+					&discordgo.Channel{
+						ID:   v.ID + "01",
+						Name: v.ID + "01",
+					},
+					&discordgo.Channel{
+						ID:   v.ID + "02",
+						Name: v.ID + "02",
+					},
+					&discordgo.Channel{
+						ID:   v.ID + "03",
+						Name: v.ID + "03",
+					},
+				},
+			}
+			s.GuildCreate(true, g)
+		}
+	}
+
+	loadGuilds()
+
+	doChecks := func(prefix string) {
+		gs := s.Guild(true, "1")
+		if gs == nil {
+			t.Fatal(prefix + " GuildState is nil")
+		}
+
+		csLocal := gs.Channel(true, "101")
+		if csLocal == nil {
+			t.Fatal(prefix + " csLocal == nil")
+		}
+
+		csGlobal := s.Channel(true, "101")
+		if csGlobal == nil {
+			t.Fatal(prefix + " csGlobal == nil")
+		}
+	}
+	doChecks("Initial:")
+
+	s.HandleReady(r)
+
+	doChecks("SecondReady:")
+
+	loadGuilds()
+
+	doChecks("SecondLoad:")
+}
+
 func TestGuildDelete(t *testing.T) {
 	s := NewState()
 	g := createTestGuild("testguild", "testchan")
