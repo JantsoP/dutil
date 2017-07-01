@@ -212,6 +212,8 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 	for _, v := range r.Guilds {
 		if s.Guild(false, v.ID) == nil {
 			s.GuildCreate(false, v)
+		} else {
+			s.GuildUpdate(v)
 		}
 	}
 }
