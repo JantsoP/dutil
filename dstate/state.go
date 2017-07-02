@@ -169,9 +169,8 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 	s.Guilds[g.ID] = guildState
 }
 
-func (s *State) GuildUpdate(g *discordgo.Guild) {
-
-	guildState := s.Guild(true, g.ID)
+func (s *State) GuildUpdate(lockMain bool, g *discordgo.Guild) {
+	guildState := s.Guild(lockMain, g.ID)
 	if guildState == nil {
 		s.GuildCreate(true, g)
 		return
@@ -213,7 +212,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 		if s.Guild(false, v.ID) == nil {
 			s.GuildCreate(false, v)
 		} else {
-			s.GuildUpdate(v)
+			s.GuildUpdate(false, v)
 		}
 	}
 }
@@ -307,7 +306,7 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 	case *discordgo.GuildCreate:
 		s.GuildCreate(true, evt.Guild)
 	case *discordgo.GuildUpdate:
-		s.GuildUpdate(evt.Guild)
+		s.GuildUpdate(true, evt.Guild)
 	case *discordgo.GuildDelete:
 		s.GuildRemove(evt.ID)
 
