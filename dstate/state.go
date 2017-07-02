@@ -209,10 +209,10 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 	}
 
 	for _, v := range r.Guilds {
+		// Can't update the guild here if it exists already because out own guild is all zeroed out in the ready
+		// event for bot account.
 		if s.Guild(false, v.ID) == nil {
 			s.GuildCreate(false, v)
-		} else {
-			s.GuildUpdate(false, v)
 		}
 	}
 }
