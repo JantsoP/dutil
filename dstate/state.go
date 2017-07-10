@@ -308,7 +308,9 @@ func (s *State) HandleEvent(session *discordgo.Session, i interface{}) {
 	case *discordgo.GuildUpdate:
 		s.GuildUpdate(true, evt.Guild)
 	case *discordgo.GuildDelete:
-		s.GuildRemove(evt.ID)
+		if !evt.Unavailable {
+			s.GuildRemove(evt.ID)
+		}
 
 	// Member events
 	case *discordgo.GuildMemberAdd:
