@@ -1,18 +1,29 @@
 package dutil
 
 import (
+	"context"
 	"github.com/jonas747/discordgo"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
+// See SplitSendMessageCtx
+func SplitSendMessage(s *discordgo.Session, channelID, message string) ([]*discordgo.Message, error) {
+	return SplitSendMessageCtx(s, context.Background(), channelID, message)
+}
+
 // A helper for sending potentially long messages
 // If the message is longer than 2k characters it will split at
 // Last newline before 2k or last whitespace before 2k or if that fails
 // (no whitespace) just split at 2k
-func SplitSendMessage(s *discordgo.Session, channelID, message string) ([]*discordgo.Message, error) {
-	return SplitSendMessagePS(s, channelID, message, "", "", false, false)
+func SplitSendMessageCtx(s *discordgo.Session, ctx context.Context, channelID, message string) ([]*discordgo.Message, error) {
+	return SplitSendMessagePSCtx(s, ctx, channelID, message, "", "", false, false)
+}
+
+// See SplitSendMessagePSCtx
+func SplitSendMessagePS(s *discordgo.Session, channelID, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
+	return SplitSendMessagePSCtx(s, context.Background(), channelID, message, prefix, suffix, prefixStart, suffixEnd)
 }
 
 // A helper for sending potentially long messages
@@ -22,14 +33,19 @@ func SplitSendMessage(s *discordgo.Session, channelID, message string) ([]*disco
 // Prefix is added to the start of each message sent (usefull for codeblocks),
 // Prefix is not not added to the first one if prefixStart is false
 // Suffix is added to the end of each message, and not the last message if suffixend is false
-func SplitSendMessagePS(s *discordgo.Session, channelID, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
-
+// Cancel the context to stop this process
+func SplitSendMessagePSCtx(s *discordgo.Session, ctx context.Context, channelID, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
 	rest := message
 	first := true
 
 	ret := make([]*discordgo.Message, 0)
 
 	for {
+
+		if ctx.Err() != nil {
+			return ret, ctx.Err()
+		}
+
 		maxLen := 2000
 
 		// Take away prefix and suffix length if used

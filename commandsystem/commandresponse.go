@@ -16,6 +16,10 @@ type Response interface {
 
 func SendResponseInterface(data *ExecData, reply interface{}, escapeEveryoneMention bool) ([]*discordgo.Message, error) {
 
+	if data.Context().Err() != nil {
+		return []*discordgo.Message{}, data.Context().Err()
+	}
+
 	switch t := reply.(type) {
 	case Response:
 		return t.Send(data)
@@ -24,7 +28,7 @@ func SendResponseInterface(data *ExecData, reply interface{}, escapeEveryoneMent
 			if escapeEveryoneMention {
 				t = dutil.EscapeEveryoneMention(t)
 			}
-			return dutil.SplitSendMessage(data.Session, data.Channel.ID(), t)
+			return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID(), t)
 		}
 		return []*discordgo.Message{}, nil
 	case error:
@@ -33,7 +37,7 @@ func SendResponseInterface(data *ExecData, reply interface{}, escapeEveryoneMent
 			if escapeEveryoneMention {
 				m = dutil.EscapeEveryoneMention(m)
 			}
-			return dutil.SplitSendMessage(data.Session, data.Channel.ID(), m)
+			return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID(), m)
 		}
 		return []*discordgo.Message{}, nil
 	case *discordgo.MessageEmbed:
@@ -104,7 +108,7 @@ func (fe *FallbackEmebd) Send(data *ExecData) ([]*discordgo.Message, error) {
 	}
 
 	content := StringEmbed(fe.MessageEmbed) + "\n*I have no 'embed links' permissions here, this is a fallback. it looks prettier if i have that perm :)*"
-	return dutil.SplitSendMessage(data.Session, data.Channel.ID(), content)
+	return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID(), content)
 }
 
 func StringEmbed(embed *discordgo.MessageEmbed) string {
