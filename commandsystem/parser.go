@@ -130,7 +130,7 @@ func (sc *Command) ParseCommand(raw string, m *discordgo.MessageCreate, s *disco
 		case ArgumentNumber:
 			val, err = ParseNumber(buf)
 		case ArgumentUser:
-			if channel == nil || channel.IsPrivate {
+			if channel == nil || channel.Type == discordgo.ChannelTypeDM {
 				continue // can't provide users in direct messages
 			}
 			val, err = ParseUser(buf, m.Message, guild)
