@@ -245,7 +245,7 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 		return
 	}
 
-	if !newChannel.IsPrivate {
+	if IsPrivate(newChannel.Type) {
 		g := s.Guild(true, newChannel.GuildID)
 		if g != nil {
 			c = g.ChannelAddUpdate(true, newChannel)
@@ -257,7 +257,7 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 
 	s.Lock()
 	s.channels[newChannel.ID] = c
-	if newChannel.IsPrivate {
+	if IsPrivate(newChannel.Type) {
 		s.PrivateChannels[newChannel.ID] = c
 	}
 	s.Unlock()
@@ -268,7 +268,7 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 		return
 	}
 
-	if evt.IsPrivate {
+	if IsPrivate(evt.Type) {
 		s.Lock()
 		defer s.Unlock()
 

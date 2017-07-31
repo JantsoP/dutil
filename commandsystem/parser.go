@@ -128,7 +128,7 @@ func (sc *Command) ParseCommand(raw string, triggerData *TriggerData) (*ExecData
 		case ArgumentNumber:
 			val, err = ParseNumber(buf)
 		case ArgumentUser:
-			if channel == nil || channel.Channel.IsPrivate {
+			if channel == nil || channel.Type() == discordgo.ChannelTypeDM {
 				continue // can't provide users in direct messages
 			}
 			val, err = ParseUser(buf, triggerData.Message, guild, sc.UserArgRequireMention)

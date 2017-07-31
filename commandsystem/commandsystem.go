@@ -110,7 +110,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	var source Source
 	if mention {
 		source = SourceMention
-	} else if channel.Channel.IsPrivate {
+	} else if channel.Type() == discordgo.ChannelTypeDM {
 		source = SourceDM
 	} else {
 		source = SourcePrefix
@@ -172,7 +172,7 @@ func (cs *System) triggerDefaultHandler(cmdStr string, trigger *TriggerData) {
 func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, m *discordgo.MessageCreate) (cmdStr string, mention bool, ok bool) {
 
 	// DM Handlers require no prefix
-	if channel.IsPrivate {
+	if channel.Type == discordgo.ChannelTypeDM {
 		return m.Content, false, true
 	}
 
