@@ -92,13 +92,20 @@ type FallbackEmebd struct {
 }
 
 func (fe *FallbackEmebd) Send(data *ExecData) ([]*discordgo.Message, error) {
-
-	channelPerms, err := data.Guild.MemberPermissions(true, data.Channel.ID(), data.State.User(true).ID)
-	if err != nil {
-		return nil, err
+	canSendEmbed := false
+	if data.Guild != nil {
+		channelPerms, err := data.Guild.MemberPermissions(true, data.Channel.ID(), data.State.User(true).ID)
+		if err != nil {
+			return nil, err
+		}
+		if channelPerms&discordgo.PermissionEmbedLinks != 0 {
+			canSendEmbed = true
+		}
+	} else {
+		canSendEmbed = true
 	}
 
-	if channelPerms&discordgo.PermissionEmbedLinks != 0 {
+	if canSendEmbed {
 		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID(), fe.MessageEmbed)
 		if err != nil {
 			return nil, err
