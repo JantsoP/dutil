@@ -245,7 +245,7 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 		return
 	}
 
-	if IsPrivate(newChannel.Type) {
+	if !IsPrivate(newChannel.Type) {
 		g := s.Guild(true, newChannel.GuildID)
 		if g != nil {
 			c = g.ChannelAddUpdate(true, newChannel)
