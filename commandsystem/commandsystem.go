@@ -201,14 +201,20 @@ func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, 
 // Generates help for all commands
 // Will probably be reworked at one point
 func (cs *System) GenerateHelp(target string, depth int) string {
-	out := "```ini\n"
+	out := ""
 	for _, cmd := range cs.Commands {
 		help := cmd.GenerateHelp(target, depth, 0)
 		if help != "" {
 			out += help + "\n"
 		}
 	}
-	return out + "```"
+
+	// No commands
+	if out == "" {
+		return ""
+	}
+
+	return "```ini\n" + out + "```"
 }
 
 // Checks the error output of a command and handles it as appropiate
