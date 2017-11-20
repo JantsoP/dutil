@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jonas747/dbstate"
 	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil"
-	"github.com/jonas747/dutil/dstate"
 	"strings"
 )
 
@@ -22,7 +22,7 @@ type TriggerData struct {
 	Session *discordgo.Session
 
 	// Nil if dstate is not being used
-	DState *dstate.State
+	State *dbstate.State
 
 	// Message that triggered the command or nil if none
 	Message *discordgo.Message
@@ -298,9 +298,9 @@ type ExecData struct {
 
 	Session *discordgo.Session
 	Message *discordgo.Message
-	Guild   *dstate.GuildState
-	Channel *dstate.ChannelState
-	State   *dstate.State
+	Guild   *discordgo.Guild
+	Channel *discordgo.Channel
+	State   *dbstate.State
 
 	ctx context.Context
 }
