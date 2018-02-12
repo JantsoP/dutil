@@ -2,9 +2,9 @@ package commandsystem
 
 import (
 	"context"
-	"github.com/jonas747/dbstate"
 	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil"
+	"github.com/jonas747/dutil/dstate"
 	"log"
 	"runtime/debug"
 	"strings"
@@ -35,7 +35,7 @@ type System struct {
 	SendStackOnPanic bool // Dumps the stack in a chat message when a panic happens in a command handler
 	SendError        bool // Set to send error messages that a command handler returned
 
-	State *dbstate.State
+	State *dstate.State
 }
 
 // Returns a system with default configuration
@@ -92,14 +92,15 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 		}
 	}()
 
-	channel, err := s.State.Channel(m.ChannelID)
-	if err != nil {
-		log.Println("[CommandSystem]: Failed getting channel from state: " + err.Error())
+	channel := cs.State.Channel(true, m.ChannelID)
+	// channel, err := s.State.Channel(m.ChannelID)
+	if channel == nil {
+		log.Println("[CommandSystem]: Failed getting channel from state")
 		return // Need channel to function
 	}
 
 	// Check if mention or prefix matches
-	commandStr, mention, ok := cs.CheckPrefix(channel, s, m)
+	commandStr, mention, ok := cs.CheckPrefix(channel.Channel, s, m)
 
 	// No prefix found :'(
 	if !ok {
@@ -109,7 +110,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	var source Source
 	if mention {
 		source = SourceMention
-	} else if channel.Type == discordgo.ChannelTypeDM {
+	} else if channel.Type() == discordgo.ChannelTypeDM {
 		source = SourceDM
 	} else {
 		source = SourcePrefix
@@ -118,7 +119,7 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	triggerData := &TriggerData{
 		Session: s,
 		Message: m.Message,
-		State:   cs.State,
+		DState:  cs.State,
 		Source:  source,
 	}
 
