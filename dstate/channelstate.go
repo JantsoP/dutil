@@ -11,7 +11,7 @@ type ChannelState struct {
 	Guild *GuildState
 
 	// These fields are never mutated and can be accessed without locking
-	id        string
+	id        int64
 	kind      discordgo.ChannelType
 	isPrivate bool
 
@@ -54,8 +54,13 @@ func NewChannelState(guild *GuildState, owner RWLocker, channel *discordgo.Chann
 
 // ID returns the channels id
 // This does no locking as ID is immutable
-func (cs *ChannelState) ID() string {
+func (cs *ChannelState) ID() int64 {
 	return cs.id
+}
+
+// StrID is the same as above but formats it in a string
+func (cs *ChannelState) StrID() string {
+	return discordgo.StrID(cs.id)
 }
 
 // Type returns the channels type
@@ -142,7 +147,7 @@ func (c *ChannelState) Update(lock bool, newChannel *discordgo.Channel) {
 
 // Message returns a message by id or nil if none found
 // The only field safe to query on a message without locking the owner (guild or state) is ID
-func (c *ChannelState) Message(lock bool, mID string) *MessageState {
+func (c *ChannelState) Message(lock bool, mID int64) *MessageState {
 	if lock {
 		c.Owner.RLock()
 		defer c.Owner.RUnlock()
@@ -221,7 +226,7 @@ func (c *ChannelState) UpdateMessages(lock bool, maxMsgs int, maxAge time.Durati
 
 // MessageRemove removes a message from the channelstate
 // If mark is true the the message will just be marked as deleted and not removed from the state
-func (c *ChannelState) MessageRemove(lock bool, messageID string, mark bool) {
+func (c *ChannelState) MessageRemove(lock bool, messageID int64, mark bool) {
 	if lock {
 		c.Owner.Lock()
 		defer c.Owner.Unlock()

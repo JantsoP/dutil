@@ -10,21 +10,21 @@ var testState *State
 
 func init() {
 	testState = NewState()
-	testGuild := createTestGuild("0", "01")
+	testGuild := createTestGuild(0, 1)
 	testState.GuildCreate(false, testGuild)
 }
 
-func createTestGuild(gID, cID string) *discordgo.Guild {
+func createTestGuild(gID, cID int64) *discordgo.Guild {
 	return &discordgo.Guild{
 		ID:   gID,
-		Name: gID,
+		Name: "Test Guild",
 		Channels: []*discordgo.Channel{
-			&discordgo.Channel{ID: cID, Name: cID},
+			&discordgo.Channel{ID: cID, Name: "Test Channel"},
 		},
 	}
 }
 
-func createTestMessage(mID, cID, content string) *discordgo.Message {
+func createTestMessage(mID, cID int64, content string) *discordgo.Message {
 	return &discordgo.Message{ID: mID, Content: content, ChannelID: cID}
 }
 
@@ -37,23 +37,23 @@ func genStringIdMap(num int) []string {
 }
 
 func TestGuildCreate(t *testing.T) {
-	g := createTestGuild("testguild", "testchan")
+	g := createTestGuild(100, 200)
 	s := NewState()
 	s.GuildCreate(true, g)
 
 	// Check if guild got added
-	gs := s.Guild(true, "testguild")
+	gs := s.Guild(true, 100)
 	if gs == nil {
 		t.Fatal("GuildState is nil")
 	}
 
 	// Check if channel got added
-	cs := s.Channel(true, "testchan")
+	cs := s.Channel(true, 200)
 	if cs == nil {
 		t.Fatal("ChannelState is nil in global map")
 	}
 
-	cs = gs.Channel(true, "testchan")
+	cs = gs.Channel(true, 200)
 	if cs == nil {
 		t.Fatal("ChannelState is nil in guildstate map")
 	}
@@ -63,7 +63,7 @@ func TestSecondReady(t *testing.T) {
 	r := &discordgo.Ready{
 		Guilds: []*discordgo.Guild{
 			&discordgo.Guild{
-				ID:          "1",
+				ID:          1,
 				Name:        "G 1",
 				Unavailable: true,
 			},
@@ -80,16 +80,16 @@ func TestSecondReady(t *testing.T) {
 				Name: v.Name,
 				Channels: []*discordgo.Channel{
 					&discordgo.Channel{
-						ID:   v.ID + "01",
-						Name: v.ID + "01",
+						ID:   v.ID + 1,
+						Name: "C " + discordgo.StrID(v.ID+1),
 					},
 					&discordgo.Channel{
-						ID:   v.ID + "02",
-						Name: v.ID + "02",
+						ID:   v.ID + 2,
+						Name: "C " + discordgo.StrID(v.ID+2),
 					},
 					&discordgo.Channel{
-						ID:   v.ID + "03",
-						Name: v.ID + "03",
+						ID:   v.ID + 3,
+						Name: "C " + discordgo.StrID(v.ID+3),
 					},
 				},
 			}
@@ -100,17 +100,17 @@ func TestSecondReady(t *testing.T) {
 	loadGuilds()
 
 	doChecks := func(prefix string) {
-		gs := s.Guild(true, "1")
+		gs := s.Guild(true, 1)
 		if gs == nil {
 			t.Fatal(prefix + " GuildState is nil")
 		}
 
-		csLocal := gs.Channel(true, "101")
+		csLocal := gs.Channel(true, 2)
 		if csLocal == nil {
 			t.Fatal(prefix + " csLocal == nil")
 		}
 
-		csGlobal := s.Channel(true, "101")
+		csGlobal := s.Channel(true, 2)
 		if csGlobal == nil {
 			t.Fatal(prefix + " csGlobal == nil")
 		}
@@ -128,19 +128,19 @@ func TestSecondReady(t *testing.T) {
 
 func TestGuildDelete(t *testing.T) {
 	s := NewState()
-	g := createTestGuild("testguild", "testchan")
+	g := createTestGuild(100, 200)
 	s.GuildCreate(true, g)
 
-	s.GuildRemove("testguild")
+	s.GuildRemove(100)
 
 	// Check if guild got removed
-	gs := s.Guild(true, "testguild")
+	gs := s.Guild(true, 100)
 	if gs != nil {
 		t.Fatal("GuildState is not nil")
 	}
 
 	// Check if channel got removed
-	cs := s.Channel(true, "testchan")
+	cs := s.Channel(true, 200)
 	if cs != nil {
 		t.Fatal("ChannelState is not nil in global map")
 	}
@@ -149,17 +149,17 @@ func TestGuildDelete(t *testing.T) {
 func TestMessageCreate(t *testing.T) {
 	s := NewState()
 	s.MaxChannelMessages = 100
-	g := createTestGuild("testguild", "testchan")
+	g := createTestGuild(100, 200)
 	s.GuildCreate(true, g)
 
 	msgEvt1 := &discordgo.MessageCreate{
-		Message: createTestMessage("a", "testchan", "Hello there buddy"),
+		Message: createTestMessage(300, 200, "Hello there buddy"),
 	}
 	msgEvt2 := &discordgo.MessageCreate{
-		Message: createTestMessage("b", "testchan", "Hello there buddy"),
+		Message: createTestMessage(301, 200, "Hello there buddy"),
 	}
 
-	cs := s.Channel(true, "testchan")
+	cs := s.Channel(true, 200)
 	if cs == nil {
 		t.Fatal("ChannelState is nil")
 	}
@@ -173,7 +173,7 @@ func TestMessageCreate(t *testing.T) {
 
 	for i := 0; i < 150; i++ {
 		s.HandleEvent(nil, &discordgo.MessageCreate{
-			Message: createTestMessage(fmt.Sprint(i), "testchan", "HHeyyy"),
+			Message: createTestMessage(302+int64(i), 200, "HHeyyy"),
 		})
 	}
 
@@ -186,15 +186,13 @@ func BenchmarkMessageCreate(b *testing.B) {
 	s := NewState()
 	s.MaxChannelMessages = 100
 
-	g := createTestGuild("testguild", "testchan")
+	g := createTestGuild(100, 200)
 	s.GuildCreate(true, g)
-
-	idMap := genStringIdMap(b.N)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		msgEvt := &discordgo.MessageCreate{
-			Message: createTestMessage(idMap[i], "testchan", "Hello there buddy"),
+			Message: createTestMessage(300+int64(i), 200, "Hello there buddy"),
 		}
 
 		s.HandleEvent(nil, msgEvt)
@@ -205,10 +203,8 @@ func BenchmarkMessageCreateParallel(b *testing.B) {
 	s := NewState()
 	s.MaxChannelMessages = 100
 
-	g := createTestGuild("testguild", "testchan")
+	g := createTestGuild(100, 200)
 	s.GuildCreate(true, g)
-
-	idMap := genStringIdMap(b.N)
 
 	b.ResetTimer()
 
@@ -216,7 +212,7 @@ func BenchmarkMessageCreateParallel(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			msgEvt := &discordgo.MessageCreate{
-				Message: createTestMessage(idMap[i], "testchan", "Hello there buddy"),
+				Message: createTestMessage(300+int64(i), 200, "Hello there buddy"),
 			}
 			s.HandleEvent(nil, msgEvt)
 			i++
@@ -228,12 +224,10 @@ func BenchmarkMessageCreateParallelMultiGuild100(b *testing.B) {
 	s := NewState()
 	s.MaxChannelMessages = 100
 
-	for i := 0; i < 100; i++ {
-		g := createTestGuild("g"+fmt.Sprint(i), fmt.Sprint(i))
+	for i := int64(0); i < 100; i++ {
+		g := createTestGuild(100+i, 200+i)
 		s.GuildCreate(true, g)
 	}
-
-	idMap := genStringIdMap(b.N)
 
 	b.ResetTimer()
 
@@ -241,7 +235,7 @@ func BenchmarkMessageCreateParallelMultiGuild100(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			msgEvt := &discordgo.MessageCreate{
-				Message: createTestMessage(idMap[i], idMap[i%100], "Hello there buddy"),
+				Message: createTestMessage(300+int64(i), 200+int64(i%100), "Hello there buddy"),
 			}
 			s.HandleEvent(nil, msgEvt)
 			i++
