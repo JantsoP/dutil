@@ -249,6 +249,9 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 		g := s.Guild(true, newChannel.GuildID)
 		if g != nil {
 			c = g.ChannelAddUpdate(true, newChannel)
+		} else {
+			// Happens occasionally when leaving guilds
+			return
 		}
 	} else {
 		// Belongs to no guild, so we can create a new rwmutex
