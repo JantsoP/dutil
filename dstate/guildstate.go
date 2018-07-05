@@ -33,9 +33,12 @@ type GuildState struct {
 // NewGuildstate creates a new guild state, it only uses the passed state to get settings from
 // Pass nil to use default settings
 func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
+	gCop := new(discordgo.Guild)
+	*gCop = *guild
+
 	guildState := &GuildState{
 		id:       guild.ID,
-		Guild:    guild,
+		Guild:    gCop,
 		Members:  make(map[int64]*MemberState),
 		Channels: make(map[int64]*ChannelState),
 	}
@@ -47,17 +50,19 @@ func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
 		guildState.removeOfflineMembers = state.RemoveOfflineMembers
 	}
 
-	for _, channel := range guild.Channels {
+	for _, channel := range gCop.Channels {
 		guildState.ChannelAddUpdate(false, channel)
 	}
 
-	for _, member := range guild.Members {
+	for _, member := range gCop.Members {
 		guildState.MemberAddUpdate(false, member)
 	}
+	gCop.Members = nil
 
-	for _, presence := range guild.Presences {
+	for _, presence := range gCop.Presences {
 		guildState.PresenceAddUpdate(false, presence)
 	}
+	gCop.Presences = nil
 
 	return guildState
 }
@@ -143,38 +148,20 @@ func (g *GuildState) Member(lock bool, id int64) *MemberState {
 	return g.Members[id]
 }
 
-// MemberCopy returns a full copy of a member, or nil if not found
-// If deep is true, roles will also be copied, otherwise nil
-func (g *GuildState) MemberCopy(lock bool, id int64, deep bool) *discordgo.Member {
+// MemberCopy returns a full copy of a MemberState, this can be used without locking
+// Warning: modifying slices in the state (such as roles) causes race conditions, they're only safe to access
+func (g *GuildState) MemberCopy(lock bool, id int64) *MemberState {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
 	}
 
 	m := g.Member(false, id)
-	if m == nil || m.Member == nil {
+	if m == nil {
 		return nil
 	}
 
-	return copyMember(m.Member, deep)
-}
-
-func copyMember(in *discordgo.Member, deep bool) *discordgo.Member {
-
-	mCopy := new(discordgo.Member)
-	*mCopy = *in
-
-	if in.User != nil {
-		mCopy.User = new(discordgo.User)
-		*mCopy.User = *in.User
-	}
-
-	mCopy.Roles = nil
-	if deep && in.Roles != nil {
-		mCopy.Roles = make([]int64, len(in.Roles))
-		copy(mCopy.Roles, in.Roles)
-	}
-	return mCopy
+	return m.Copy()
 }
 
 // ChannelCopy returns a copy of a channel
@@ -202,27 +189,16 @@ func (g *GuildState) MemberAddUpdate(lock bool, newMember *discordgo.Member) {
 
 	existing, ok := g.Members[newMember.User.ID]
 	if ok {
-		if existing.Member == nil {
-			existing.Member = copyMember(newMember, true)
-		} else {
-			// Patch
-			if newMember.JoinedAt != "" {
-				existing.Member.JoinedAt = newMember.JoinedAt
-			}
-			if newMember.Roles != nil {
-				existing.Member.Roles = newMember.Roles
-			}
-
-			// Seems to always be provided
-			existing.Member.Nick = newMember.Nick
-			existing.Member.User = newMember.User
-		}
+		existing.UpdateMember(newMember)
 	} else {
-		g.Members[newMember.User.ID] = &MemberState{
-			Guild:  g,
-			id:     newMember.User.ID,
-			Member: copyMember(newMember, true),
+		ms := &MemberState{
+			Guild: g,
+			ID:    newMember.User.ID,
+			Bot:   newMember.User.Bot,
 		}
+
+		ms.UpdateMember(newMember)
+		g.Members[newMember.User.ID] = ms
 	}
 }
 
@@ -271,25 +247,16 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 
 	existing, ok := g.Members[newPresence.User.ID]
 	if ok {
-		if existing.Presence == nil {
-			existing.Presence = copyPresence(newPresence)
-		} else {
-			// Patch
-
-			// Nil games indicates them not playing anything, so this had to always be provided?
-			// IDK the docs dosen't seem to correspond to the actual results very well
-			existing.Presence.Game = newPresence.Game
-
-			if newPresence.Status != "" {
-				existing.Presence.Status = newPresence.Status
-			}
-		}
+		existing.UpdatePresence(newPresence)
 	} else {
-		g.Members[newPresence.User.ID] = &MemberState{
-			Guild:    g,
-			id:       newPresence.User.ID,
-			Presence: copyPresence(newPresence),
+		ms := &MemberState{
+			Guild: g,
+			ID:    newPresence.User.ID,
+			Bot:   newPresence.User.Bot,
 		}
+
+		ms.UpdatePresence(newPresence)
+		g.Members[newPresence.User.ID] = ms
 	}
 
 	if newPresence.Status == discordgo.StatusOffline && g.removeOfflineMembers {
@@ -300,7 +267,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 
 			member := g.Member(false, newPresence.User.ID)
 			if member != nil {
-				if member.Presence == nil || member.Presence.Status == discordgo.StatusOffline {
+				if !member.PresenceSet || member.PresenceStatus == discordgo.StatusOffline {
 					delete(g.Members, newPresence.User.ID)
 				}
 			}
@@ -470,7 +437,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID int64, memberID int6
 	}
 
 	mState := g.Member(false, memberID)
-	if mState == nil || mState.Member == nil {
+	if mState == nil {
 		return 0, ErrMemberNotFound
 	}
 
@@ -482,7 +449,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID int64, memberID int6
 	}
 
 	for _, role := range g.Guild.Roles {
-		for _, roleID := range mState.Member.Roles {
+		for _, roleID := range mState.Roles {
 			if role.ID == roleID {
 				apermissions |= role.Permissions
 				break
@@ -516,7 +483,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID int64, memberID int6
 
 	// Member overwrites can override role overrides, so do two passes
 	for _, overwrite := range cState.Channel.PermissionOverwrites {
-		for _, roleID := range mState.Member.Roles {
+		for _, roleID := range mState.Roles {
 			if overwrite.Type == "role" && roleID == overwrite.ID {
 				denies |= overwrite.Deny
 				allows |= overwrite.Allow

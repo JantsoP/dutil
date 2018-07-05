@@ -60,25 +60,6 @@ func NewState() *State {
 	}
 }
 
-type MemberState struct {
-	Guild *GuildState
-
-	id int64
-
-	Member   *discordgo.Member
-	Presence *discordgo.Presence
-}
-
-// ID returns the id of the member, this is safe to use without any locking as id is immutable
-func (m *MemberState) ID() int64 {
-	return m.id
-}
-
-// StrID is the same as above, formatted as a string
-func (m *MemberState) StrID() string {
-	return discordgo.StrID(m.id)
-}
-
 // Guild returns a given guilds GuildState
 func (s *State) Guild(lock bool, id int64) *GuildState {
 	if lock {
