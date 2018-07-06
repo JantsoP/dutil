@@ -1,7 +1,10 @@
 package dstate
 
 import (
+	"encoding/hex"
 	"github.com/jonas747/discordgo"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,10 +37,11 @@ type MemberState struct {
 
 	// The hash of the user's avatar. Use Session.UserAvatar
 	// to retrieve the avatar itself.
-	Avatar string `json:"avatar"`
+	Avatar         [16]byte `json:"avatar"`
+	AnimatedAvatar bool
 
 	// The discriminator of the user (4 numbers after name).
-	Discriminator string `json:"discriminator"`
+	Discriminator int32 `json:"discriminator"`
 
 	// Whether the user is a bot, safe to access without locking
 	Bot bool `json:"bot"`
@@ -62,8 +66,11 @@ func (m *MemberState) UpdateMember(member *discordgo.Member) {
 	m.Nick = member.Nick
 
 	m.Username = member.User.Username
-	m.Avatar = member.User.Avatar
-	m.Discriminator = member.User.Discriminator
+	m.parseAvatar(member.User.Avatar)
+
+	discrim, _ := strconv.ParseInt(member.User.Discriminator, 10, 32)
+	m.Discriminator = int32(discrim)
+
 	m.MemberSet = true
 }
 
@@ -80,9 +87,25 @@ func (m *MemberState) UpdatePresence(presence *discordgo.Presence) {
 		m.Username = presence.User.Username
 	}
 
-	if presence.User.Avatar != "" {
-		m.Avatar = presence.User.Avatar
+	if presence.User.Discriminator != "" {
+		discrim, _ := strconv.ParseInt(presence.User.Discriminator, 10, 32)
+		m.Discriminator = int32(discrim)
 	}
+
+	if presence.User.Avatar != "" {
+		m.parseAvatar(presence.User.Avatar)
+	}
+}
+
+func (m *MemberState) parseAvatar(str string) {
+	if strings.HasPrefix(str, "a_") {
+		str = str[2:]
+		m.AnimatedAvatar = true
+	} else {
+		m.AnimatedAvatar = false
+	}
+
+	hex.Decode(m.Avatar[:], []byte(str))
 }
 
 // Copy returns a copy of the state, this is not a deep copy so the slices will point to the same arrays, so they're only read safe, not write safe
