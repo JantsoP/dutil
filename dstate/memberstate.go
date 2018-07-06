@@ -8,14 +8,23 @@ import (
 	"time"
 )
 
+type PresenceStatus int32
+
+const (
+	StatusNotSet       PresenceStatus = 0
+	StatusOnline       PresenceStatus = 1
+	StatusIdle         PresenceStatus = 2
+	StatusDoNotDisturb PresenceStatus = 3
+	StatusInvisible    PresenceStatus = 4
+	StatusOffline      PresenceStatus = 5
+)
+
 // MemberState represents the state of a member
 type MemberState struct {
 	Guild *GuildState
 
 	// The ID of the member, safe to access without locking
 	ID int64 `json:"id"`
-
-	MemberSet bool `json:"member_set"`
 
 	// The time at which the member joined the guild, in ISO8601.
 	// This may be zero if the member hasnt been updated
@@ -27,24 +36,25 @@ type MemberState struct {
 	// A list of IDs of the roles which are possessed by the member.
 	Roles []int64 `json:"roles"`
 
-	// Wether the presence Information was set
-	PresenceSet    bool             `json:"presence_set"`
-	PresenceStatus discordgo.Status `json:"presence_status"`
-	PresenceGame   *discordgo.Game  `json:"presence_game"`
+	PresenceStatus PresenceStatus  `json:"presence_status"`
+	PresenceGame   *discordgo.Game `json:"presence_game"`
 
 	// The users username.
 	Username string `json:"username"`
 
 	// The hash of the user's avatar. Use Session.UserAvatar
 	// to retrieve the avatar itself.
-	Avatar         [16]byte `json:"avatar"`
-	AnimatedAvatar bool
-
+	Avatar [16]byte `json:"avatar"`
 	// The discriminator of the user (4 numbers after name).
 	Discriminator int32 `json:"discriminator"`
 
+	AnimatedAvatar bool
+
 	// Whether the user is a bot, safe to access without locking
-	Bot bool `json:"bot"`
+	Bot       bool `json:"bot"`
+	MemberSet bool `json:"member_set"`
+	// Wether the presence Information was set
+	PresenceSet bool `json:"presence_set"`
 }
 
 // StrID is the same as above, formatted as a string
@@ -76,7 +86,6 @@ func (m *MemberState) UpdateMember(member *discordgo.Member) {
 
 func (m *MemberState) UpdatePresence(presence *discordgo.Presence) {
 	m.PresenceSet = true
-	m.PresenceStatus = presence.Status
 	m.PresenceGame = presence.Game
 
 	if !m.MemberSet {
@@ -94,6 +103,22 @@ func (m *MemberState) UpdatePresence(presence *discordgo.Presence) {
 
 	if presence.User.Avatar != "" {
 		m.parseAvatar(presence.User.Avatar)
+	}
+
+	if presence.Status != "" {
+
+		switch presence.Status {
+		case discordgo.StatusOnline:
+			m.PresenceStatus = StatusOnline
+		case discordgo.StatusIdle:
+			m.PresenceStatus = StatusIdle
+		case discordgo.StatusDoNotDisturb:
+			m.PresenceStatus = StatusDoNotDisturb
+		case discordgo.StatusInvisible:
+			m.PresenceStatus = StatusInvisible
+		case discordgo.StatusOffline:
+			m.PresenceStatus = StatusOffline
+		}
 	}
 }
 

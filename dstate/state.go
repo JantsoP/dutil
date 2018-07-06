@@ -103,7 +103,7 @@ func (s *State) Channel(lock bool, id int64) *ChannelState {
 
 // ChannelCopy returns a copy of a channel,
 // lock dictates wether state should be RLocked or not, channel will be locked regardless
-func (s *State) ChannelCopy(lock bool, id int64, deep bool) *discordgo.Channel {
+func (s *State) ChannelCopy(lock bool, id int64, deep bool) *ChannelState {
 
 	cState := s.Channel(lock, id)
 	if cState == nil {
@@ -131,8 +131,8 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 		s.Unlock()
 		existing.RLock()
 		for _, channel := range existing.Channels {
-			preservedMessages[channel.ID()] = channel.Messages
-			toRemove = append(toRemove, channel.ID())
+			preservedMessages[channel.ID] = channel.Messages
+			toRemove = append(toRemove, channel.ID)
 		}
 		existing.RUnlock()
 		s.Lock()
@@ -145,11 +145,11 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 	// No need to lock it since we just created it and theres no chance of anyone else accessing it
 	guildState := NewGuildState(g, s)
 	for _, channel := range guildState.Channels {
-		if preserved, ok := preservedMessages[channel.ID()]; ok {
+		if preserved, ok := preservedMessages[channel.ID]; ok {
 			channel.Messages = preserved
 		}
 
-		s.channels[channel.ID()] = channel
+		s.channels[channel.ID] = channel
 	}
 
 	s.Guilds[g.ID] = guildState

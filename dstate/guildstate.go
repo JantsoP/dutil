@@ -54,15 +54,18 @@ func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
 		guildState.ChannelAddUpdate(false, channel)
 	}
 
-	for _, member := range gCop.Members {
-		guildState.MemberAddUpdate(false, member)
-	}
-	gCop.Members = nil
+	if state.TrackMembers {
+		for _, member := range gCop.Members {
+			guildState.MemberAddUpdate(false, member)
+		}
 
-	for _, presence := range gCop.Presences {
-		guildState.PresenceAddUpdate(false, presence)
+		for _, presence := range gCop.Presences {
+			guildState.PresenceAddUpdate(false, presence)
+		}
 	}
+
 	gCop.Presences = nil
+	gCop.Members = nil
 
 	return guildState
 }
@@ -109,12 +112,12 @@ func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	OUTER:
 		for _, checking := range g.Channels {
 			for _, c := range newGuild.Channels {
-				if c.ID == checking.id {
+				if c.ID == checking.ID {
 					continue OUTER
 				}
 			}
 
-			delete(g.Channels, checking.id)
+			delete(g.Channels, checking.ID)
 		}
 	}
 }
@@ -166,14 +169,14 @@ func (g *GuildState) MemberCopy(lock bool, id int64) *MemberState {
 
 // ChannelCopy returns a copy of a channel
 // if deep is true, permissionoverwrites will be copied, otherwise nil
-func (g *GuildState) ChannelCopy(lock bool, id int64, deep bool) *discordgo.Channel {
+func (g *GuildState) ChannelCopy(lock bool, id int64, deep bool) *ChannelState {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
 	}
 
 	c := g.Channel(false, id)
-	if c == nil || c.Channel == nil {
+	if c == nil {
 		return nil
 	}
 
@@ -267,7 +270,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 
 			member := g.Member(false, newPresence.User.ID)
 			if member != nil {
-				if !member.PresenceSet || member.PresenceStatus == discordgo.StatusOffline {
+				if !member.PresenceSet || member.PresenceStatus == StatusOffline {
 					delete(g.Members, newPresence.User.ID)
 				}
 			}
@@ -470,7 +473,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID int64, memberID int6
 	}
 
 	// Apply @everyone overrides from the channel.
-	for _, overwrite := range cState.Channel.PermissionOverwrites {
+	for _, overwrite := range cState.PermissionOverwrites {
 		if g.Guild.ID == overwrite.ID {
 			apermissions &= ^overwrite.Deny
 			apermissions |= overwrite.Allow
@@ -482,7 +485,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID int64, memberID int6
 	allows := 0
 
 	// Member overwrites can override role overrides, so do two passes
-	for _, overwrite := range cState.Channel.PermissionOverwrites {
+	for _, overwrite := range cState.PermissionOverwrites {
 		for _, roleID := range mState.Roles {
 			if overwrite.Type == "role" && roleID == overwrite.ID {
 				denies |= overwrite.Deny
@@ -495,7 +498,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID int64, memberID int6
 	apermissions &= ^denies
 	apermissions |= allows
 
-	for _, overwrite := range cState.Channel.PermissionOverwrites {
+	for _, overwrite := range cState.PermissionOverwrites {
 		if overwrite.Type == "member" && overwrite.ID == memberID {
 			apermissions &= ^overwrite.Deny
 			apermissions |= overwrite.Allow
