@@ -46,7 +46,7 @@ type MemberState struct {
 func (m *MemberState) UpdateMember(member *discordgo.Member) {
 	// Patch
 	if member.JoinedAt != "" {
-		m.JoinedAt, _ = time.Parse("2006-01-02T15:04:05-0700", member.JoinedAt)
+		m.JoinedAt, _ = time.Parse(time.RFC3339, member.JoinedAt)
 	}
 
 	if member.Roles != nil {
