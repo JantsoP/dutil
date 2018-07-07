@@ -54,6 +54,30 @@ func NewChannelState(guild *GuildState, owner RWLocker, channel *discordgo.Chann
 	return cs
 }
 
+func (c *ChannelState) DGoCopy() *discordgo.Channel {
+	channel := &discordgo.Channel{
+
+		ID:   c.ID,
+		Type: c.Type,
+
+		Name:                 c.Name,
+		Topic:                c.Topic,
+		LastMessageID:        c.LastMessageID,
+		NSFW:                 c.NSFW,
+		Position:             c.Position,
+		Bitrate:              c.Bitrate,
+		PermissionOverwrites: c.PermissionOverwrites,
+		ParentID:             c.ParentID,
+		Recipients:           c.Recipients,
+	}
+
+	if c.Guild != nil {
+		channel.GuildID = c.Guild.ID()
+	}
+
+	return channel
+}
+
 // StrID is a conveniece method for retrieving the id in string form
 func (cs *ChannelState) StrID() string {
 	return discordgo.StrID(cs.ID)

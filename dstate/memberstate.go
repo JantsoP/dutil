@@ -68,7 +68,7 @@ func MSFromDGoMember(gs *GuildState, member *discordgo.Member) *MemberState {
 		MemberSet: true,
 	}
 
-	ms.parseAvatar(member.User.Avatar)
+	ms.ParseAvatar(member.User.Avatar)
 
 	discrim, _ := strconv.ParseInt(member.User.Discriminator, 10, 32)
 	ms.Discriminator = int32(discrim)
@@ -97,7 +97,7 @@ func (m *MemberState) UpdateMember(member *discordgo.Member) {
 	m.Nick = member.Nick
 
 	m.Username = member.User.Username
-	m.parseAvatar(member.User.Avatar)
+	m.ParseAvatar(member.User.Avatar)
 
 	discrim, _ := strconv.ParseInt(member.User.Discriminator, 10, 32)
 	m.Discriminator = int32(discrim)
@@ -123,7 +123,7 @@ func (m *MemberState) UpdatePresence(presence *discordgo.Presence) {
 	}
 
 	if presence.User.Avatar != "" {
-		m.parseAvatar(presence.User.Avatar)
+		m.ParseAvatar(presence.User.Avatar)
 	}
 
 	if presence.Status != "" {
@@ -143,7 +143,7 @@ func (m *MemberState) UpdatePresence(presence *discordgo.Presence) {
 	}
 }
 
-func (m *MemberState) parseAvatar(str string) {
+func (m *MemberState) ParseAvatar(str string) {
 	if strings.HasPrefix(str, "a_") {
 		str = str[2:]
 		m.AnimatedAvatar = true
