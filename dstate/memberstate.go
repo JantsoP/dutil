@@ -57,6 +57,27 @@ type MemberState struct {
 	PresenceSet bool `json:"presence_set"`
 }
 
+func MSFromDGoMember(gs *GuildState, member *discordgo.Member) *MemberState {
+	ms := &MemberState{
+		Guild:     gs,
+		ID:        member.User.ID,
+		Roles:     member.Roles,
+		Username:  member.User.Username,
+		Nick:      member.Nick,
+		Bot:       member.User.Bot,
+		MemberSet: true,
+	}
+
+	ms.parseAvatar(member.User.Avatar)
+
+	discrim, _ := strconv.ParseInt(member.User.Discriminator, 10, 32)
+	ms.Discriminator = int32(discrim)
+
+	ms.JoinedAt, _ = time.Parse("2006-01-02T15:04:05-0700", member.JoinedAt)
+
+	return ms
+}
+
 // StrID is the same as above, formatted as a string
 func (m *MemberState) StrID() string {
 	return discordgo.StrID(m.ID)
@@ -138,4 +159,36 @@ func (m *MemberState) Copy() *MemberState {
 	cop := new(MemberState)
 	*cop = *m
 	return cop
+}
+
+func (m *MemberState) StrAvatar() string {
+	dst := make([]byte, 32)
+
+	hex.Encode(dst, m.Avatar[:])
+
+	str := string(dst)
+	if m.AnimatedAvatar {
+		str = "a_" + str
+	}
+
+	return str
+}
+
+func (m *MemberState) DGoCopy() *discordgo.Member {
+	return &discordgo.Member{
+		User:     m.DGoUser(),
+		Nick:     m.Nick,
+		Roles:    m.Roles,
+		JoinedAt: m.JoinedAt.Format("2006-01-02T15:04:05-0700"),
+	}
+}
+
+func (m *MemberState) DGoUser() *discordgo.User {
+	return &discordgo.User{
+		ID:            m.ID,
+		Username:      m.Username,
+		Bot:           m.Bot,
+		Avatar:        m.StrAvatar(),
+		Discriminator: strconv.FormatInt(int64(m.Discriminator), 10),
+	}
 }
