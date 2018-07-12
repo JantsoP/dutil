@@ -17,7 +17,7 @@ type State struct {
 	Guilds map[int64]*GuildState
 
 	// Global channel mapping for convenience
-	channels        map[int64]*ChannelState
+	Channels        map[int64]*ChannelState
 	PrivateChannels map[int64]*ChannelState
 
 	// Absolute max number of messages stored per channel
@@ -47,7 +47,7 @@ type State struct {
 func NewState() *State {
 	return &State{
 		Guilds:          make(map[int64]*GuildState),
-		channels:        make(map[int64]*ChannelState),
+		Channels:        make(map[int64]*ChannelState),
 		PrivateChannels: make(map[int64]*ChannelState),
 
 		TrackChannels:         true,
@@ -98,7 +98,7 @@ func (s *State) Channel(lock bool, id int64) *ChannelState {
 		defer s.RUnlock()
 	}
 
-	return s.channels[id]
+	return s.Channels[id]
 }
 
 // ChannelCopy returns a copy of a channel,
@@ -138,7 +138,7 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 		s.Lock()
 
 		for _, cID := range toRemove {
-			delete(s.channels, cID)
+			delete(s.Channels, cID)
 		}
 	}
 
@@ -149,7 +149,7 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 			channel.Messages = preserved
 		}
 
-		s.channels[channel.ID] = channel
+		s.Channels[channel.ID] = channel
 	}
 
 	s.Guilds[g.ID] = guildState
@@ -174,9 +174,9 @@ func (s *State) GuildRemove(id int64) {
 		return
 	}
 	// Remove all references
-	for c, cs := range s.channels {
+	for c, cs := range s.Channels {
 		if cs.Guild == g {
-			delete(s.channels, c)
+			delete(s.Channels, c)
 		}
 	}
 	delete(s.Guilds, id)
@@ -190,7 +190,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 
 	for _, channel := range r.PrivateChannels {
 		cs := NewChannelState(nil, &sync.RWMutex{}, channel)
-		s.channels[channel.ID] = cs
+		s.Channels[channel.ID] = cs
 		s.PrivateChannels[channel.ID] = cs
 	}
 
@@ -245,7 +245,7 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 	}
 
 	s.Lock()
-	s.channels[newChannel.ID] = c
+	s.Channels[newChannel.ID] = c
 	if IsPrivate(newChannel.Type) {
 		s.PrivateChannels[newChannel.ID] = c
 	}
@@ -261,7 +261,7 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 		s.Lock()
 		defer s.Unlock()
 
-		delete(s.channels, evt.ID)
+		delete(s.Channels, evt.ID)
 		delete(s.PrivateChannels, evt.ID)
 		return
 	}
@@ -271,7 +271,7 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 		g.ChannelRemove(true, evt.ID)
 
 		s.Lock()
-		delete(s.channels, evt.ID)
+		delete(s.Channels, evt.ID)
 		s.Unlock()
 	}
 }

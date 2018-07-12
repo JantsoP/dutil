@@ -7,8 +7,8 @@ import (
 
 // ChannelState represents a channel's state
 type ChannelState struct {
-	Owner RWLocker
-	Guild *GuildState
+	Owner RWLocker    `json:"-"`
+	Guild *GuildState `json:"-"`
 
 	// These fields never change
 	ID   int64                 `json:"id"`
@@ -27,7 +27,7 @@ type ChannelState struct {
 	Recipients []*discordgo.User `json:"recipients"`
 
 	// Accessing the channel without locking the owner yields undefined behaviour
-	Messages []*MessageState
+	Messages []*MessageState `json:"messages"`
 }
 
 func NewChannelState(guild *GuildState, owner RWLocker, channel *discordgo.Channel) *ChannelState {
@@ -72,7 +72,7 @@ func (c *ChannelState) DGoCopy() *discordgo.Channel {
 	}
 
 	if c.Guild != nil {
-		channel.GuildID = c.Guild.ID()
+		channel.GuildID = c.Guild.ID
 	}
 
 	return channel

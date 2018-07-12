@@ -16,18 +16,18 @@ type GuildState struct {
 	sync.RWMutex
 
 	// ID is never mutated, so can be accessed without locking
-	id int64
+	ID int64 `json:"id"`
 
 	// The underlying guild, the members and channels fields shouldnt be used
-	Guild *discordgo.Guild
+	Guild *discordgo.Guild `json:"guld"`
 
-	Members  map[int64]*MemberState
-	Channels map[int64]*ChannelState
+	Members  map[int64]*MemberState  `json:"members"`
+	Channels map[int64]*ChannelState `json:"channels" `
 
-	maxMessages           int           // Absolute max number of messages cached in a channel
-	maxMessageDuration    time.Duration // Max age of messages, if 0 ignored. (Only checks age whena new message is received on the channel)
-	removeDeletedMessages bool
-	removeOfflineMembers  bool
+	MaxMessages           int           // Absolute max number of messages cached in a channel
+	MaxMessageDuration    time.Duration // Max age of messages, if 0 ignored. (Only checks age whena new message is received on the channel)
+	RemoveDeletedMessages bool
+	RemoveOfflineMembers  bool
 }
 
 // NewGuildstate creates a new guild state, it only uses the passed state to get settings from
@@ -37,17 +37,17 @@ func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
 	*gCop = *guild
 
 	guildState := &GuildState{
-		id:       guild.ID,
+		ID:       guild.ID,
 		Guild:    gCop,
 		Members:  make(map[int64]*MemberState),
 		Channels: make(map[int64]*ChannelState),
 	}
 
 	if state != nil {
-		guildState.maxMessages = state.MaxChannelMessages
-		guildState.maxMessageDuration = state.MaxMessageAge
-		guildState.removeDeletedMessages = state.RemoveDeletedMessages
-		guildState.removeOfflineMembers = state.RemoveOfflineMembers
+		guildState.MaxMessages = state.MaxChannelMessages
+		guildState.MaxMessageDuration = state.MaxMessageAge
+		guildState.RemoveDeletedMessages = state.RemoveDeletedMessages
+		guildState.RemoveOfflineMembers = state.RemoveOfflineMembers
 	}
 
 	for _, channel := range gCop.Channels {
@@ -70,15 +70,9 @@ func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
 	return guildState
 }
 
-// ID returns the GuildState's id
-// This requires no locking as id is never mutated
-func (g *GuildState) ID() int64 {
-	return g.id
-}
-
 // StrID is the same as above but formats it in a string first
 func (g *GuildState) StrID() string {
-	return discordgo.StrID(g.id)
+	return discordgo.StrID(g.ID)
 }
 
 // GuildUpdate updates the guild with new guild information
@@ -262,7 +256,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 		g.Members[newPresence.User.ID] = ms
 	}
 
-	if newPresence.Status == discordgo.StatusOffline && g.removeOfflineMembers {
+	if newPresence.Status == discordgo.StatusOffline && g.RemoveOfflineMembers {
 		// Remove after a minute incase they just restart the client or something
 		time.AfterFunc(time.Minute, func() {
 			g.Lock()

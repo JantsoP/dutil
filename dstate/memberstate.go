@@ -21,7 +21,7 @@ const (
 
 // MemberState represents the state of a member
 type MemberState struct {
-	Guild *GuildState
+	Guild *GuildState `json:"-"`
 
 	// The ID of the member, safe to access without locking
 	ID int64 `json:"id"`
@@ -48,7 +48,7 @@ type MemberState struct {
 	// The discriminator of the user (4 numbers after name).
 	Discriminator int32 `json:"discriminator"`
 
-	AnimatedAvatar bool
+	AnimatedAvatar bool `json:"animated_avatar"`
 
 	// Whether the user is a bot, safe to access without locking
 	Bot       bool `json:"bot"`
