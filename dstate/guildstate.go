@@ -19,7 +19,7 @@ type GuildState struct {
 	ID int64 `json:"id"`
 
 	// The underlying guild, the members and channels fields shouldnt be used
-	Guild *discordgo.Guild `json:"guld"`
+	Guild *discordgo.Guild `json:"guild"`
 
 	Members  map[int64]*MemberState  `json:"members"`
 	Channels map[int64]*ChannelState `json:"channels" `

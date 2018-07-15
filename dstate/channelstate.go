@@ -7,8 +7,8 @@ import (
 
 // ChannelState represents a channel's state
 type ChannelState struct {
-	Owner RWLocker    `json:"-"`
-	Guild *GuildState `json:"-"`
+	Owner RWLocker    `json:"-" msgpack:"-"`
+	Guild *GuildState `json:"-" msgpack:"-"`
 
 	// These fields never change
 	ID   int64                 `json:"id"`

@@ -21,7 +21,7 @@ const (
 
 // MemberState represents the state of a member
 type MemberState struct {
-	Guild *GuildState `json:"-"`
+	Guild *GuildState `json:"-" msgpack:"-"`
 
 	// The ID of the member, safe to access without locking
 	ID int64 `json:"id"`
