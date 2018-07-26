@@ -90,9 +90,7 @@ func (m *MemberState) UpdateMember(member *discordgo.Member) {
 		m.JoinedAt = parsed
 	}
 
-	if member.Roles != nil {
-		m.Roles = member.Roles
-	}
+	m.Roles = member.Roles
 
 	// Seems to always be provided
 	m.Nick = member.Nick
