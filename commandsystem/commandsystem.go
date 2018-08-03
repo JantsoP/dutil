@@ -1,8 +1,10 @@
 package commandsystem
 
 import (
-	"github.com/bwmarrin/discordgo"
+	"context"
+	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil"
+	"github.com/jonas747/dutil/dstate"
 	"log"
 	"runtime/debug"
 	"strings"
@@ -32,6 +34,8 @@ type System struct {
 	IgnoreBots       bool // Set to ignore bots (NewSystem sets it to true)
 	SendStackOnPanic bool // Dumps the stack in a chat message when a panic happens in a command handler
 	SendError        bool // Set to send error messages that a command handler returned
+
+	State *dstate.State
 }
 
 // Returns a system with default configuration
@@ -73,6 +77,8 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 		if r := recover(); r != nil {
 			stack := string(debug.Stack())
 			log.Println("[CommandSystem]: Recovered from panic in CommandHandler:", r, "\n", m.Content, "\n", stack)
+
+			// Only send if panic was caused by handling command
 			if didMatch {
 				if cs.SendStackOnPanic {
 					_, err := dutil.SplitSendMessage(s, m.ChannelID, "Panic when handling Command! ```\n"+stack+"\n```")
@@ -86,14 +92,15 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 		}
 	}()
 
-	channel, err := s.State.Channel(m.ChannelID)
-	if err != nil {
-		log.Println("[CommandSystem]: Failed getting channel from state:", err)
+	channel := cs.State.Channel(true, m.ChannelID)
+	// channel, err := s.State.Channel(m.ChannelID)
+	if channel == nil {
+		log.Println("[CommandSystem]: Failed getting channel from state")
 		return // Need channel to function
 	}
 
 	// Check if mention or prefix matches
-	commandStr, mention, ok := cs.CheckPrefix(channel, s, m)
+	commandStr, mention, ok := cs.CheckPrefix(channel.Channel, s, m)
 
 	// No prefix found :'(
 	if !ok {
@@ -103,26 +110,31 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	var source Source
 	if mention {
 		source = SourceMention
-	} else if channel.Type == discordgo.ChannelTypeDM {
+	} else if channel.Type() == discordgo.ChannelTypeDM {
 		source = SourceDM
 	} else {
 		source = SourcePrefix
 	}
 
+	triggerData := &TriggerData{
+		Session: s,
+		Message: m.Message,
+		DState:  cs.State,
+		Source:  source,
+	}
+
 	// Check if any additional fields were provided to the command, if not just run the default command if possible
 	if commandStr == "" {
-
 		didMatch = true
-		cs.triggerDefaultHandler(commandStr, source, m, s)
-
+		cs.triggerDefaultHandler(commandStr, triggerData)
 		return
 	}
 
 	// Find a handler
 	for _, v := range cs.Commands {
-		if v.CheckMatch(commandStr, source, m, s) {
+		if v.CheckMatch(commandStr, triggerData) {
 			didMatch = true
-			_, err := v.HandleCommand(commandStr, source, m, s)
+			_, err := v.HandleCommand(commandStr, triggerData, context.Background())
 			cs.CheckCommandError(err, m.ChannelID, s)
 			return
 		}
@@ -130,31 +142,31 @@ func (cs *System) HandleMessageCreate(s *discordgo.Session, m *discordgo.Message
 
 	didMatch = true
 	// No handler found, check the default one
-	cs.triggerDefaultHandler(commandStr, source, m, s)
+	cs.triggerDefaultHandler(commandStr, triggerData)
 
 }
 
 // Trigger the default handler for the appropiate source
-func (cs *System) triggerDefaultHandler(cmdStr string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) {
+func (cs *System) triggerDefaultHandler(cmdStr string, trigger *TriggerData) {
 
 	var err error
 
-	switch source {
+	switch trigger.Source {
 	case SourceDM:
 		if cs.DefaultDMHandler != nil {
-			_, err = cs.DefaultDMHandler.HandleCommand(cmdStr, source, m, s)
+			_, err = cs.DefaultDMHandler.HandleCommand(cmdStr, trigger, context.Background())
 		}
 	case SourceMention:
 		if cs.DefaultMentionHandler != nil {
-			_, err = cs.DefaultMentionHandler.HandleCommand(cmdStr, source, m, s)
+			_, err = cs.DefaultMentionHandler.HandleCommand(cmdStr, trigger, context.Background())
 		}
 	default:
 		if cs.DefaultHandler != nil {
-			_, err = cs.DefaultHandler.HandleCommand(cmdStr, source, m, s)
+			_, err = cs.DefaultHandler.HandleCommand(cmdStr, trigger, context.Background())
 		}
 	}
 
-	cs.CheckCommandError(err, m.ChannelID, s)
+	cs.CheckCommandError(err, trigger.Message.ChannelID, trigger.Session)
 }
 
 func (cs *System) CheckPrefix(channel *discordgo.Channel, s *discordgo.Session, m *discordgo.MessageCreate) (cmdStr string, mention bool, ok bool) {

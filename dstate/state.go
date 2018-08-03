@@ -1,7 +1,7 @@
 package dstate
 
 import (
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"log"
 	"reflect"
 	"sync"
@@ -14,11 +14,11 @@ type State struct {
 	r *discordgo.Ready
 
 	// All connected guilds
-	Guilds map[string]*GuildState
+	Guilds map[int64]*GuildState
 
 	// Global channel mapping for convenience
-	channels        map[string]*ChannelState
-	PrivateChannels map[string]*ChannelState
+	Channels        map[int64]*ChannelState
+	PrivateChannels map[int64]*ChannelState
 
 	// Absolute max number of messages stored per channel
 	MaxChannelMessages int
@@ -46,9 +46,9 @@ type State struct {
 
 func NewState() *State {
 	return &State{
-		Guilds:          make(map[string]*GuildState),
-		channels:        make(map[string]*ChannelState),
-		PrivateChannels: make(map[string]*ChannelState),
+		Guilds:          make(map[int64]*GuildState),
+		Channels:        make(map[int64]*ChannelState),
+		PrivateChannels: make(map[int64]*ChannelState),
 
 		TrackChannels:         true,
 		TrackMembers:          true,
@@ -61,7 +61,7 @@ func NewState() *State {
 }
 
 // Guild returns a given guilds GuildState
-func (s *State) Guild(lock bool, id string) *GuildState {
+func (s *State) Guild(lock bool, id int64) *GuildState {
 	if lock {
 		s.RLock()
 		defer s.RUnlock()
@@ -71,7 +71,7 @@ func (s *State) Guild(lock bool, id string) *GuildState {
 }
 
 // LightGuildcopy returns a light copy of a guild (without any slices included)
-func (s *State) LightGuildCopy(lock bool, id string) *discordgo.Guild {
+func (s *State) LightGuildCopy(lock bool, id int64) *discordgo.Guild {
 	if lock {
 		s.RLock()
 	}
@@ -92,18 +92,18 @@ func (s *State) LightGuildCopy(lock bool, id string) *discordgo.Guild {
 }
 
 // Channel returns a channelstate from id
-func (s *State) Channel(lock bool, id string) *ChannelState {
+func (s *State) Channel(lock bool, id int64) *ChannelState {
 	if lock {
 		s.RLock()
 		defer s.RUnlock()
 	}
 
-	return s.channels[id]
+	return s.Channels[id]
 }
 
 // ChannelCopy returns a copy of a channel,
 // lock dictates wether state should be RLocked or not, channel will be locked regardless
-func (s *State) ChannelCopy(lock bool, id string, deep bool) *discordgo.Channel {
+func (s *State) ChannelCopy(lock bool, id int64, deep bool) *ChannelState {
 
 	cState := s.Channel(lock, id)
 	if cState == nil {
@@ -122,34 +122,34 @@ func (s *State) GuildCreate(lock bool, g *discordgo.Guild) {
 
 	// Preserve messages in the state and
 	// purge existing global channel maps if this guy was already in the state
-	preservedMessages := make(map[string][]*MessageState)
+	preservedMessages := make(map[int64][]*MessageState)
 
 	existing := s.Guild(false, g.ID)
 	if existing != nil {
 		// Synchronization is hard
-		toRemove := make([]string, 0)
+		toRemove := make([]int64, 0)
 		s.Unlock()
 		existing.RLock()
 		for _, channel := range existing.Channels {
-			preservedMessages[channel.ID()] = channel.Messages
-			toRemove = append(toRemove, channel.ID())
+			preservedMessages[channel.ID] = channel.Messages
+			toRemove = append(toRemove, channel.ID)
 		}
 		existing.RUnlock()
 		s.Lock()
 
 		for _, cID := range toRemove {
-			delete(s.channels, cID)
+			delete(s.Channels, cID)
 		}
 	}
 
 	// No need to lock it since we just created it and theres no chance of anyone else accessing it
 	guildState := NewGuildState(g, s)
 	for _, channel := range guildState.Channels {
-		if preserved, ok := preservedMessages[channel.ID()]; ok {
+		if preserved, ok := preservedMessages[channel.ID]; ok {
 			channel.Messages = preserved
 		}
 
-		s.channels[channel.ID()] = channel
+		s.Channels[channel.ID] = channel
 	}
 
 	s.Guilds[g.ID] = guildState
@@ -165,7 +165,7 @@ func (s *State) GuildUpdate(lockMain bool, g *discordgo.Guild) {
 	guildState.GuildUpdate(true, g)
 }
 
-func (s *State) GuildRemove(id string) {
+func (s *State) GuildRemove(id int64) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -174,9 +174,9 @@ func (s *State) GuildRemove(id string) {
 		return
 	}
 	// Remove all references
-	for c, cs := range s.channels {
+	for c, cs := range s.Channels {
 		if cs.Guild == g {
-			delete(s.channels, c)
+			delete(s.Channels, c)
 		}
 	}
 	delete(s.Guilds, id)
@@ -190,7 +190,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 
 	for _, channel := range r.PrivateChannels {
 		cs := NewChannelState(nil, &sync.RWMutex{}, channel)
-		s.channels[channel.ID] = cs
+		s.Channels[channel.ID] = cs
 		s.PrivateChannels[channel.ID] = cs
 	}
 
@@ -204,7 +204,7 @@ func (s *State) HandleReady(r *discordgo.Ready) {
 }
 
 // User Returns a copy of the user from the ready event
-func (s *State) User(lock bool) *discordgo.User {
+func (s *State) User(lock bool) *discordgo.SelfUser {
 	if lock {
 		s.RLock()
 		defer s.RUnlock()
@@ -214,7 +214,7 @@ func (s *State) User(lock bool) *discordgo.User {
 		return nil
 	}
 
-	uCopy := new(discordgo.User)
+	uCopy := new(discordgo.SelfUser)
 	*uCopy = *s.r.User
 
 	return uCopy
@@ -245,7 +245,7 @@ func (s *State) ChannelAddUpdate(newChannel *discordgo.Channel) {
 	}
 
 	s.Lock()
-	s.channels[newChannel.ID] = c
+	s.Channels[newChannel.ID] = c
 	if IsPrivate(newChannel.Type) {
 		s.PrivateChannels[newChannel.ID] = c
 	}
@@ -261,7 +261,7 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 		s.Lock()
 		defer s.Unlock()
 
-		delete(s.channels, evt.ID)
+		delete(s.Channels, evt.ID)
 		delete(s.PrivateChannels, evt.ID)
 		return
 	}
@@ -271,7 +271,7 @@ func (s *State) ChannelRemove(evt *discordgo.Channel) {
 		g.ChannelRemove(true, evt.ID)
 
 		s.Lock()
-		delete(s.channels, evt.ID)
+		delete(s.Channels, evt.ID)
 		s.Unlock()
 	}
 }

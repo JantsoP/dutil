@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil/dstate"
 	"os"
 )

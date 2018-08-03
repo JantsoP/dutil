@@ -1,8 +1,9 @@
 package commandsystem
 
 import (
+	"context"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"strings"
 )
 
@@ -77,7 +78,7 @@ func (cc *CommandContainer) ContainerHelp(depth int) string {
 	return fmt.Sprintf("%s"+fmtName+"=%-20s : %s", Indent(depth), cc.Name, aliasesStr, cc.Description)
 }
 
-func (cc *CommandContainer) CheckMatch(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (cc *CommandContainer) CheckMatch(raw string, trigger *TriggerData) bool {
 	fields := strings.SplitN(raw, " ", 2)
 	if strings.EqualFold(fields[0], cc.Name) {
 		return true
@@ -92,33 +93,32 @@ func (cc *CommandContainer) CheckMatch(raw string, source Source, m *discordgo.M
 	return false
 }
 
-func (cc *CommandContainer) HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) ([]*discordgo.Message, error) {
+func (cc *CommandContainer) HandleCommand(raw string, source Source, trigger *TriggerData, ctx context.Context) ([]*discordgo.Message, error) {
 	split := strings.SplitN(raw, " ", 2)
 
 	if len(split) > 1 {
 		for _, v := range cc.Children {
-			if v.CheckMatch(split[1], source, m, s) {
-				return v.HandleCommand(split[1], source, m, s)
+			if v.CheckMatch(split[1], trigger) {
+				return v.HandleCommand(split[1], trigger, ctx)
 			}
 		}
 
-		// Not found
 		if cc.NotFoundHandler != nil {
-			return cc.NotFoundHandler.HandleCommand(split[1], source, m, s)
+			return cc.NotFoundHandler.HandleCommand(split[1], trigger, ctx)
 		} else {
-			return cc.SendUnknownHelp(m, s, split[1])
+			return cc.SendUnknownHelp(trigger.Message, trigger.Session, split[1])
 		}
 	} else {
 		if cc.DefaultHandler != nil {
-			return cc.DefaultHandler.HandleCommand("", source, m, s)
+			return cc.DefaultHandler.HandleCommand("", trigger, ctx)
 		} else {
-			return cc.SendUnknownHelp(m, s, "")
+			return cc.SendUnknownHelp(trigger.Message, trigger.Session, "")
 		}
 	}
 	return nil, nil
 }
 
-func (cc *CommandContainer) SendUnknownHelp(m *discordgo.MessageCreate, s *discordgo.Session, badCmd string) ([]*discordgo.Message, error) {
+func (cc *CommandContainer) SendUnknownHelp(m *discordgo.Message, s *discordgo.Session, badCmd string) ([]*discordgo.Message, error) {
 	cm, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%s: Unknown subcommand (%q) D: see help for usage.", cc.Name, badCmd))
 	return []*discordgo.Message{cm}, err
 }

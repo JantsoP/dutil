@@ -1,67 +1,86 @@
 package dstate
 
 import (
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"time"
 )
 
 // ChannelState represents a channel's state
 type ChannelState struct {
-	Owner RWLocker
-	Guild *GuildState
+	Owner RWLocker    `json:"-" msgpack:"-"`
+	Guild *GuildState `json:"-" msgpack:"-"`
 
-	// These fields are never mutated and can be accessed without locking
-	id        string
-	kind      discordgo.ChannelType
-	isPrivate bool
+	// These fields never change
+	ID   int64                 `json:"id"`
+	Type discordgo.ChannelType `json:"type"`
+
+	Name                 string                           `json:"name"`
+	Topic                string                           `json:"topic"`
+	LastMessageID        int64                            `json:"last_message_id"`
+	NSFW                 bool                             `json:"nsfw"`
+	Position             int                              `json:"position"`
+	Bitrate              int                              `json:"bitrate"`
+	PermissionOverwrites []*discordgo.PermissionOverwrite `json:"permission_overwrites"`
+	ParentID             int64                            `json:"parent_id"`
 
 	// Recicipient used to never be mutated but in the case with group dm's it can
-	recipients []*discordgo.User
+	Recipients []*discordgo.User `json:"recipients"`
 
 	// Accessing the channel without locking the owner yields undefined behaviour
-	Channel  *discordgo.Channel
-	Messages []*MessageState
+	Messages []*MessageState `json:"messages"`
 }
 
 func NewChannelState(guild *GuildState, owner RWLocker, channel *discordgo.Channel) *ChannelState {
 
-	// Create a copy of the channel
-	cCopy := copyChannel(channel, true)
-
 	cs := &ChannelState{
-		Owner:   owner,
-		Guild:   guild,
-		Channel: cCopy,
+		Owner: owner,
+		Guild: guild,
 
-		id:   channel.ID,
-		kind: channel.Type,
-	}
+		ID:   channel.ID,
+		Type: channel.Type,
 
-	if IsPrivate(cs.kind) && len(channel.Recipients) > 0 {
-		// Make a copy of the recipient
-		cs.recipients = make([]*discordgo.User, len(channel.Recipients))
-		for i, v := range channel.Recipients {
-			u := new(discordgo.User)
-			*u = *v
-			cs.recipients[i] = u
-		}
+		Name:                 channel.Name,
+		Topic:                channel.Topic,
+		LastMessageID:        channel.LastMessageID,
+		NSFW:                 channel.NSFW,
+		Position:             channel.Position,
+		Bitrate:              channel.Bitrate,
+		PermissionOverwrites: channel.PermissionOverwrites,
+		ParentID:             channel.ParentID,
+
+		Recipients: channel.Recipients,
 	}
 
 	return cs
 }
 
-// Set of accessors below to access the immutable fields and make sure you can't modify them
+func (c *ChannelState) DGoCopy() *discordgo.Channel {
+	channel := &discordgo.Channel{
 
-// ID returns the channels id
-// This does no locking as ID is immutable
-func (cs *ChannelState) ID() string {
-	return cs.id
+		ID:   c.ID,
+		Type: c.Type,
+
+		Name:                 c.Name,
+		Topic:                c.Topic,
+		LastMessageID:        c.LastMessageID,
+		NSFW:                 c.NSFW,
+		Position:             c.Position,
+		Bitrate:              c.Bitrate,
+		PermissionOverwrites: c.PermissionOverwrites,
+		ParentID:             c.ParentID,
+		Recipients:           c.Recipients,
+	}
+
+	if c.Guild != nil {
+		channel.GuildID = c.Guild.ID
+	}
+
+	return channel
 }
 
-// Type returns the channels type
-// This does no locking as Type is immutable
-func (cs *ChannelState) Type() discordgo.ChannelType {
-	return cs.kind
+// StrID is a conveniece method for retrieving the id in string form
+func (cs *ChannelState) StrID() string {
+	return discordgo.StrID(cs.ID)
 }
 
 // Recipient returns the channels recipient, if you modify this you get undefined behaviour
@@ -69,50 +88,46 @@ func (cs *ChannelState) Type() discordgo.ChannelType {
 //
 // In case of group dms, this will return the first recipient
 func (cs *ChannelState) Recipient() *discordgo.User {
-	if cs.kind == discordgo.ChannelTypeGroupDM {
+	if cs.Type == discordgo.ChannelTypeGroupDM {
 		cs.Owner.RLock()
 		defer cs.Owner.RUnlock()
 	}
-	if len(cs.recipients) < 1 {
+	if len(cs.Recipients) < 1 {
 		return nil
 	}
 
-	return cs.recipients[0]
+	return cs.Recipients[0]
 }
 
 // IsPrivate returns true if the channel is private
-// This does no locking as IsPrivate is immutable
+// This does no locking as Type is immutable
 func (cs *ChannelState) IsPrivate() bool {
-	return IsPrivate(cs.kind)
+	return IsPrivate(cs.Type)
 }
 
 // Copy returns a copy of the channel
 // if deep is true, permissionoverwrites will be copied
-func (c *ChannelState) Copy(lock bool, deep bool) *discordgo.Channel {
+func (c *ChannelState) Copy(lock bool, deep bool) *ChannelState {
 	if lock {
 		c.Owner.RLock()
 		defer c.Owner.RUnlock()
 	}
 
-	return copyChannel(c.Channel, deep)
-}
+	cop := new(ChannelState)
+	*cop = *c
 
-func copyChannel(in *discordgo.Channel, deep bool) *discordgo.Channel {
-	cCopy := new(discordgo.Channel)
-	*cCopy = *in
-
-	cCopy.Messages = nil
-	cCopy.PermissionOverwrites = nil
+	cop.PermissionOverwrites = nil
+	cop.Messages = nil
 
 	if deep {
-		for _, pow := range in.PermissionOverwrites {
+		for _, pow := range c.PermissionOverwrites {
 			powCopy := new(discordgo.PermissionOverwrite)
 			*powCopy = *pow
-			cCopy.PermissionOverwrites = append(cCopy.PermissionOverwrites, pow)
+			cop.PermissionOverwrites = append(cop.PermissionOverwrites, pow)
 		}
 	}
 
-	return cCopy
+	return cop
 }
 
 // Update updates a channel
@@ -123,26 +138,26 @@ func (c *ChannelState) Update(lock bool, newChannel *discordgo.Channel) {
 		defer c.Owner.Unlock()
 	}
 
-	if newChannel.PermissionOverwrites == nil {
-		newChannel.PermissionOverwrites = c.Channel.PermissionOverwrites
+	if newChannel.PermissionOverwrites != nil {
+		c.PermissionOverwrites = newChannel.PermissionOverwrites
 	}
 
-	if newChannel.Recipients != nil && c.kind == discordgo.ChannelTypeGroupDM {
-		c.recipients = make([]*discordgo.User, len(newChannel.Recipients))
-		for i, v := range newChannel.Recipients {
-			u := new(discordgo.User)
-			*u = *v
-			c.recipients[i] = u
-		}
-
-		newChannel.Recipients = c.Channel.Recipients
+	if newChannel.Recipients != nil && c.Type == discordgo.ChannelTypeGroupDM {
+		c.Recipients = newChannel.Recipients
 	}
-	*c.Channel = *newChannel
+
+	c.Name = newChannel.Name
+	c.Topic = newChannel.Topic
+	c.LastMessageID = newChannel.LastMessageID
+	c.NSFW = newChannel.NSFW
+	c.Position = newChannel.Position
+	c.Bitrate = newChannel.Bitrate
+	c.ParentID = newChannel.ParentID
 }
 
 // Message returns a message by id or nil if none found
 // The only field safe to query on a message without locking the owner (guild or state) is ID
-func (c *ChannelState) Message(lock bool, mID string) *MessageState {
+func (c *ChannelState) Message(lock bool, mID int64) *MessageState {
 	if lock {
 		c.Owner.RLock()
 		defer c.Owner.RUnlock()
@@ -221,7 +236,7 @@ func (c *ChannelState) UpdateMessages(lock bool, maxMsgs int, maxAge time.Durati
 
 // MessageRemove removes a message from the channelstate
 // If mark is true the the message will just be marked as deleted and not removed from the state
-func (c *ChannelState) MessageRemove(lock bool, messageID string, mark bool) {
+func (c *ChannelState) MessageRemove(lock bool, messageID int64, mark bool) {
 	if lock {
 		c.Owner.Lock()
 		defer c.Owner.Unlock()

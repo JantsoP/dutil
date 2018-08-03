@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil/commandsystem"
+	"github.com/jonas747/dutil/dstate"
 	"log"
+	"os"
 )
 
 var (
@@ -18,6 +21,11 @@ func init() {
 }
 
 func main() {
+
+	if flagToken == "" {
+		flagToken = os.Getenv("YAGPDB_BOTTOKEN")
+	}
+
 	session, err := discordgo.New(flagToken)
 	if err != nil {
 		panic(err)
@@ -26,6 +34,10 @@ func main() {
 	// Create a new command system, this function will add a handler
 	// and set the prfix to "!"
 	system := commandsystem.NewSystem(session, "!")
+
+	state := dstate.NewState()
+	session.AddHandler(state.HandleEvent)
+	system.State = state
 
 	// Add general commands
 	Addcommands(system)
@@ -93,10 +105,21 @@ func Addcommands(system *commandsystem.System) {
 			},
 		},
 		&commandsystem.Command{
-			Name:        "How",
+			Name:        "Presence",
+			Aliases:     []string{"pres"},
 			Description: "What is this computer code thing what am doign halp",
 			Run: func(data *commandsystem.ExecData) (interface{}, error) {
-				return "How is this working?", nil
+				data.Guild.RLock()
+				defer data.Guild.RUnlock()
+
+				member := data.Guild.Member(false, data.Message.Author.ID)
+
+				if member.Presence != nil {
+					marshalled, _ := json.Marshal(member.Presence)
+					return string(marshalled), nil
+				}
+
+				return "YOU HAEV NO PRESENCE BOI", nil
 			},
 		},
 		&commandsystem.CommandContainer{

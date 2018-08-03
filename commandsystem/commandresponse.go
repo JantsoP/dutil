@@ -3,7 +3,7 @@ package commandsystem
 import (
 	"errors"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil"
 	"reflect"
 	"time"
@@ -28,7 +28,7 @@ func SendResponseInterface(data *ExecData, reply interface{}, escapeEveryoneMent
 			if escapeEveryoneMention {
 				t = dutil.EscapeEveryoneMention(t)
 			}
-			return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID, t)
+			return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID(), t)
 		}
 		return []*discordgo.Message{}, nil
 	case error:
@@ -37,11 +37,11 @@ func SendResponseInterface(data *ExecData, reply interface{}, escapeEveryoneMent
 			if escapeEveryoneMention {
 				m = dutil.EscapeEveryoneMention(m)
 			}
-			return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID, m)
+			return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID(), m)
 		}
 		return []*discordgo.Message{}, nil
 	case *discordgo.MessageEmbed:
-		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID, t)
+		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID(), t)
 		return []*discordgo.Message{m}, err
 	}
 
@@ -77,9 +77,9 @@ func (t *TemporaryResponse) Send(data *ExecData) ([]*discordgo.Message, error) {
 			for i, m := range msgs {
 				ids[i] = m.ID
 			}
-			data.Session.ChannelMessagesBulkDelete(data.Channel.ID, ids)
+			data.Session.ChannelMessagesBulkDelete(data.Channel.ID(), ids)
 		} else {
-			data.Session.ChannelMessageDelete(data.Channel.ID, msgs[0].ID)
+			data.Session.ChannelMessageDelete(data.Channel.ID(), msgs[0].ID)
 		}
 	})
 	return msgs, nil
@@ -92,14 +92,21 @@ type FallbackEmebd struct {
 }
 
 func (fe *FallbackEmebd) Send(data *ExecData) ([]*discordgo.Message, error) {
-
-	channelPerms, err := data.Session.State.UserChannelPermissions(data.Session.State.User.ID, data.Channel.ID)
-	if err != nil {
-		return nil, err
+	canSendEmbed := false
+	if data.Guild != nil {
+		channelPerms, err := data.Guild.MemberPermissions(true, data.Channel.ID(), data.State.User(true).ID)
+		if err != nil {
+			return nil, err
+		}
+		if channelPerms&discordgo.PermissionEmbedLinks != 0 {
+			canSendEmbed = true
+		}
+	} else {
+		canSendEmbed = true
 	}
 
-	if channelPerms&discordgo.PermissionEmbedLinks != 0 {
-		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID, fe.MessageEmbed)
+	if canSendEmbed {
+		m, err := data.Session.ChannelMessageSendEmbed(data.Channel.ID(), fe.MessageEmbed)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +115,7 @@ func (fe *FallbackEmebd) Send(data *ExecData) ([]*discordgo.Message, error) {
 	}
 
 	content := StringEmbed(fe.MessageEmbed) + "\n*I have no 'embed links' permissions here, this is a fallback. it looks prettier if i have that perm :)*"
-	return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID, content)
+	return dutil.SplitSendMessageCtx(data.Session, data.ctx, data.Channel.ID(), content)
 }
 
 func StringEmbed(embed *discordgo.MessageEmbed) string {

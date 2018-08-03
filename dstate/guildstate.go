@@ -2,7 +2,7 @@ package dstate
 
 import (
 	"errors"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"sync"
 	"time"
 )
@@ -16,62 +16,63 @@ type GuildState struct {
 	sync.RWMutex
 
 	// ID is never mutated, so can be accessed without locking
-	id string
+	ID int64 `json:"id"`
 
 	// The underlying guild, the members and channels fields shouldnt be used
-	Guild *discordgo.Guild
+	Guild *discordgo.Guild `json:"guild"`
 
-	Members  map[string]*MemberState
-	Channels map[string]*ChannelState
+	Members  map[int64]*MemberState  `json:"members"`
+	Channels map[int64]*ChannelState `json:"channels" `
 
-	maxMessages           int           // Absolute max number of messages cached in a channel
-	maxMessageDuration    time.Duration // Max age of messages, if 0 ignored. (Only checks age whena new message is received on the channel)
-	removeDeletedMessages bool
-	removeOfflineMembers  bool
+	MaxMessages           int           // Absolute max number of messages cached in a channel
+	MaxMessageDuration    time.Duration // Max age of messages, if 0 ignored. (Only checks age whena new message is received on the channel)
+	RemoveDeletedMessages bool
+	RemoveOfflineMembers  bool
 }
 
 // NewGuildstate creates a new guild state, it only uses the passed state to get settings from
 // Pass nil to use default settings
 func NewGuildState(guild *discordgo.Guild, state *State) *GuildState {
-
 	gCop := new(discordgo.Guild)
 	*gCop = *guild
 
 	guildState := &GuildState{
-		id:       guild.ID,
+		ID:       guild.ID,
 		Guild:    gCop,
-		Members:  make(map[string]*MemberState),
-		Channels: make(map[string]*ChannelState),
+		Members:  make(map[int64]*MemberState),
+		Channels: make(map[int64]*ChannelState),
 	}
 
 	if state != nil {
-		guildState.maxMessages = state.MaxChannelMessages
-		guildState.maxMessageDuration = state.MaxMessageAge
-		guildState.removeDeletedMessages = state.RemoveDeletedMessages
-		guildState.removeOfflineMembers = state.RemoveOfflineMembers
+		guildState.MaxMessages = state.MaxChannelMessages
+		guildState.MaxMessageDuration = state.MaxMessageAge
+		guildState.RemoveDeletedMessages = state.RemoveDeletedMessages
+		guildState.RemoveOfflineMembers = state.RemoveOfflineMembers
 	}
 
 	for _, channel := range gCop.Channels {
 		guildState.ChannelAddUpdate(false, channel)
 	}
 
-	for _, member := range gCop.Members {
-		guildState.MemberAddUpdate(false, member)
-	}
-	gCop.Members = nil
+	if state.TrackMembers {
+		for _, member := range gCop.Members {
+			guildState.MemberAddUpdate(false, member)
+		}
 
-	for _, presence := range gCop.Presences {
-		guildState.PresenceAddUpdate(false, presence)
+		for _, presence := range gCop.Presences {
+			guildState.PresenceAddUpdate(false, presence)
+		}
 	}
+
 	gCop.Presences = nil
+	gCop.Members = nil
 
 	return guildState
 }
 
-// ID returns the GuildState's id
-// This requires no locking as id is never mutated
-func (g *GuildState) ID() string {
-	return g.id
+// StrID is the same as above but formats it in a string first
+func (g *GuildState) StrID() string {
+	return discordgo.StrID(g.ID)
 }
 
 // GuildUpdate updates the guild with new guild information
@@ -105,12 +106,12 @@ func (g *GuildState) GuildUpdate(lock bool, newGuild *discordgo.Guild) {
 	OUTER:
 		for _, checking := range g.Channels {
 			for _, c := range newGuild.Channels {
-				if c.ID == checking.id {
+				if c.ID == checking.ID {
 					continue OUTER
 				}
 			}
 
-			delete(g.Channels, checking.id)
+			delete(g.Channels, checking.ID)
 		}
 	}
 }
@@ -135,7 +136,7 @@ func (g *GuildState) LightCopy(lock bool) *discordgo.Guild {
 }
 
 // Member returns a the member from an id, or nil if not found
-func (g *GuildState) Member(lock bool, id string) *MemberState {
+func (g *GuildState) Member(lock bool, id int64) *MemberState {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -146,7 +147,7 @@ func (g *GuildState) Member(lock bool, id string) *MemberState {
 
 // MemberCopy returns a full copy of a MemberState, this can be used without locking
 // Warning: modifying slices in the state (such as roles) causes race conditions, they're only safe to access
-func (g *GuildState) MemberCopy(lock bool, id string) *MemberState {
+func (g *GuildState) MemberCopy(lock bool, id int64) *MemberState {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -162,14 +163,14 @@ func (g *GuildState) MemberCopy(lock bool, id string) *MemberState {
 
 // ChannelCopy returns a copy of a channel
 // if deep is true, permissionoverwrites will be copied, otherwise nil
-func (g *GuildState) ChannelCopy(lock bool, id string, deep bool) *discordgo.Channel {
+func (g *GuildState) ChannelCopy(lock bool, id int64, deep bool) *ChannelState {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
 	}
 
 	c := g.Channel(false, id)
-	if c == nil || c.Channel == nil {
+	if c == nil {
 		return nil
 	}
 
@@ -214,7 +215,7 @@ func (g *GuildState) MemberAdd(lock bool, newMember *discordgo.Member) {
 // MemberRemove removes a member from the guildstate
 // it also decrements membercount, so only call this on the GuildMemberRemove event
 // If you wanna remove a member purely from the state, use StateRemoveMember
-func (g *GuildState) MemberRemove(lock bool, id string) {
+func (g *GuildState) MemberRemove(lock bool, id int64) {
 	if lock {
 		g.Lock()
 		defer g.Unlock()
@@ -225,7 +226,7 @@ func (g *GuildState) MemberRemove(lock bool, id string) {
 }
 
 // StateRemoveMember removes a guildmember from the state and does NOT decrement member_count
-func (g *GuildState) StateRemoveMember(lock bool, id string) {
+func (g *GuildState) StateRemoveMember(lock bool, id int64) {
 	if lock {
 		g.Lock()
 		defer g.Unlock()
@@ -255,7 +256,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 		g.Members[newPresence.User.ID] = ms
 	}
 
-	if newPresence.Status == discordgo.StatusOffline && g.removeOfflineMembers {
+	if newPresence.Status == discordgo.StatusOffline && g.RemoveOfflineMembers {
 		// Remove after a minute incase they just restart the client or something
 		time.AfterFunc(time.Minute, func() {
 			g.Lock()
@@ -263,7 +264,7 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 
 			member := g.Member(false, newPresence.User.ID)
 			if member != nil {
-				if !member.PresenceSet || member.PresenceStatus == discordgo.StatusOffline {
+				if !member.PresenceSet || member.PresenceStatus == StatusOffline {
 					delete(g.Members, newPresence.User.ID)
 				}
 			}
@@ -285,7 +286,7 @@ func copyPresence(in *discordgo.Presence) *discordgo.Presence {
 
 	cop.Roles = nil
 	if in.Roles != nil {
-		cop.Roles = make([]string, len(in.Roles))
+		cop.Roles = make([]int64, len(in.Roles))
 		copy(cop.Roles, in.Roles)
 	}
 
@@ -293,7 +294,7 @@ func copyPresence(in *discordgo.Presence) *discordgo.Presence {
 }
 
 // Channel retrieves a channelstate by id
-func (g *GuildState) Channel(lock bool, id string) *ChannelState {
+func (g *GuildState) Channel(lock bool, id int64) *ChannelState {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -323,7 +324,7 @@ func (g *GuildState) ChannelAddUpdate(lock bool, newChannel *discordgo.Channel) 
 }
 
 // ChannelRemove removes a channel from the GuildState
-func (g *GuildState) ChannelRemove(lock bool, id string) {
+func (g *GuildState) ChannelRemove(lock bool, id int64) {
 	if lock {
 		g.Lock()
 		defer g.Unlock()
@@ -332,7 +333,7 @@ func (g *GuildState) ChannelRemove(lock bool, id string) {
 }
 
 // Role returns a role by id
-func (g *GuildState) Role(lock bool, id string) *discordgo.Role {
+func (g *GuildState) Role(lock bool, id int64) *discordgo.Role {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -361,7 +362,7 @@ func (g *GuildState) RoleAddUpdate(lock bool, newRole *discordgo.Role) {
 	}
 }
 
-func (g *GuildState) RoleRemove(lock bool, id string) {
+func (g *GuildState) RoleRemove(lock bool, id int64) {
 	if lock {
 		g.Lock()
 		defer g.Unlock()
@@ -375,7 +376,7 @@ func (g *GuildState) RoleRemove(lock bool, id string) {
 	}
 }
 
-func (g *GuildState) VoiceState(lock bool, userID string) *discordgo.VoiceState {
+func (g *GuildState) VoiceState(lock bool, userID int64) *discordgo.VoiceState {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -397,7 +398,7 @@ func (g *GuildState) VoiceStateUpdate(lock bool, update *discordgo.VoiceStateUpd
 	}
 
 	// Handle Leaving Channel
-	if update.ChannelID == "" {
+	if update.ChannelID == 0 {
 		for i, state := range g.Guild.VoiceStates {
 			if state.UserID == update.UserID {
 				g.Guild.VoiceStates = append(g.Guild.VoiceStates[:i], g.Guild.VoiceStates[i+1:]...)
@@ -422,7 +423,7 @@ func (g *GuildState) VoiceStateUpdate(lock bool, update *discordgo.VoiceStateUpd
 
 // Calculates the permissions for a member.
 // https://support.discordapp.com/hc/en-us/articles/206141927-How-is-the-permission-hierarchy-structured-
-func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID string) (apermissions int, err error) {
+func (g *GuildState) MemberPermissions(lock bool, channelID int64, memberID int64) (apermissions int, err error) {
 	if lock {
 		g.RLock()
 		defer g.RUnlock()
@@ -466,7 +467,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID str
 	}
 
 	// Apply @everyone overrides from the channel.
-	for _, overwrite := range cState.Channel.PermissionOverwrites {
+	for _, overwrite := range cState.PermissionOverwrites {
 		if g.Guild.ID == overwrite.ID {
 			apermissions &= ^overwrite.Deny
 			apermissions |= overwrite.Allow
@@ -478,7 +479,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID str
 	allows := 0
 
 	// Member overwrites can override role overrides, so do two passes
-	for _, overwrite := range cState.Channel.PermissionOverwrites {
+	for _, overwrite := range cState.PermissionOverwrites {
 		for _, roleID := range mState.Roles {
 			if overwrite.Type == "role" && roleID == overwrite.ID {
 				denies |= overwrite.Deny
@@ -491,7 +492,7 @@ func (g *GuildState) MemberPermissions(lock bool, channelID string, memberID str
 	apermissions &= ^denies
 	apermissions |= allows
 
-	for _, overwrite := range cState.Channel.PermissionOverwrites {
+	for _, overwrite := range cState.PermissionOverwrites {
 		if overwrite.Type == "member" && overwrite.ID == memberID {
 			apermissions &= ^overwrite.Deny
 			apermissions |= overwrite.Allow

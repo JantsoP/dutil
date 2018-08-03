@@ -3,15 +3,14 @@ package dutil
 // Package dutil provides general discordgo utilities that i find to be reusing across my discord projects
 
 import (
-	"github.com/bwmarrin/discordgo"
-	"strconv"
+	"github.com/jonas747/discordgo"
 	"strings"
 )
 
 // Returns all guild members in a guild
 // It will make `number of members`/1000 requests to the api
-func GetAllGuildMembers(session *discordgo.Session, guilID string) ([]*discordgo.Member, error) {
-	var after string
+func GetAllGuildMembers(session *discordgo.Session, guilID int64) ([]*discordgo.Member, error) {
+	var after int64
 	members := make([]*discordgo.Member, 0)
 
 	for {
@@ -42,10 +41,7 @@ func IsRoleAbove(a, b *discordgo.Role) bool {
 		return false
 	}
 
-	pa, _ := strconv.ParseInt(a.ID, 10, 64)
-	pb, _ := strconv.ParseInt(b.ID, 10, 64)
-
-	return pa < pb
+	return a.ID < b.ID
 }
 
 // Channels are a collection of Channels

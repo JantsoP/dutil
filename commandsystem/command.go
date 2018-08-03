@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/discordgo"
 	"github.com/jonas747/dutil"
+	"github.com/jonas747/dutil/dstate"
 	"strings"
 )
 
@@ -17,13 +18,24 @@ var (
 
 type CommandHandlerFunc func(raw string, m *discordgo.MessageCreate, s *discordgo.Session)
 
+type TriggerData struct {
+	Session *discordgo.Session
+
+	// Nil if dstate is not being used
+	DState *dstate.State
+
+	// Message that triggered the command or nil if none
+	Message *discordgo.Message
+	Source  Source
+}
+
 // Represents a command handler to handle commands
 type CommandHandler interface {
 	// Called to check if the command matched "raw"
-	CheckMatch(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) bool
+	CheckMatch(raw string, triggerData *TriggerData) bool
 
 	// Handle the command itself, returns the response messages and an error if something went wrong
-	HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) ([]*discordgo.Message, error)
+	HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) ([]*discordgo.Message, error)
 
 	// Generates help output, maxDepth is how far into container help will go
 	GenerateHelp(target string, maxDepth, currentDepth int) string
@@ -86,7 +98,7 @@ type RunFunc func(data *ExecData) (interface{}, error)
 
 func (sc *Command) GenerateHelp(target string, maxDepth, currentDepth int) string {
 	if target != "" {
-		if !sc.CheckMatch(target, SourceHelp, nil, nil) {
+		if !sc.CheckMatch(target, &TriggerData{Source: SourceHelp}) {
 			return ""
 		}
 	}
@@ -121,14 +133,14 @@ func (sc *Command) GenerateHelp(target string, maxDepth, currentDepth int) strin
 	return out
 }
 
-func (sc *Command) CheckMatch(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) bool {
+func (sc *Command) CheckMatch(raw string, triggerData *TriggerData) bool {
 	// Check if this is a mention and ignore if so
-	if source == SourceMention && sc.IgnoreMentions {
+	if triggerData.Source == SourceMention && sc.IgnoreMentions {
 		return false
 	}
 
 	// Same as above with dm's
-	if source == SourceDM && !sc.RunInDm {
+	if triggerData.Source == SourceDM && !sc.RunInDm {
 		return false
 	}
 
@@ -181,8 +193,8 @@ func (sc *Command) StringArgs(detailed bool) string {
 	return argsString
 }
 
-func (sc *Command) HandleCommand(raw string, source Source, m *discordgo.MessageCreate, s *discordgo.Session) (msgs []*discordgo.Message, err error) {
-	data, err := sc.ParseCommand(raw, m, s)
+func (sc *Command) HandleCommand(raw string, triggerData *TriggerData, ctx context.Context) (msgs []*discordgo.Message, err error) {
+	parsedData, err := sc.ParseCommand(raw, triggerData)
 	if err != nil {
 		messageContent := "Failed running command: " + err.Error() + "\n" + "Usage: `" + sc.Name + " " + sc.StringArgs(true) + "`"
 		if sc.LongDescription != "" {
@@ -191,25 +203,26 @@ func (sc *Command) HandleCommand(raw string, source Source, m *discordgo.Message
 			messageContent += "\n" + sc.Description
 		}
 
-		m, err2 := s.ChannelMessageSend(m.ChannelID, dutil.EscapeEveryoneMention(messageContent))
+		m, err2 := triggerData.Session.ChannelMessageSend(triggerData.Message.ChannelID, dutil.EscapeEveryoneMention(messageContent))
 		if err2 == nil {
 			return []*discordgo.Message{m}, err
 		}
 		return nil, err
 	}
 
-	data.Source = source
+	parsedData.ctx = ctx
+	parsedData.Source = triggerData.Source
 
 	if sc.Run == nil {
 		return nil, nil
 	}
 
-	reply, err := sc.Run(data)
+	reply, err := sc.Run(parsedData)
 	if reply != nil {
 		var err2 error
-		msgs, err2 = SendResponseInterface(data, reply, !sc.AllowEveryoneMention)
+		msgs, err2 = SendResponseInterface(parsedData, reply, !sc.AllowEveryoneMention)
 		if err2 != nil {
-			return nil, err2
+			return msgs, err2
 		}
 	}
 
@@ -285,8 +298,9 @@ type ExecData struct {
 
 	Session *discordgo.Session
 	Message *discordgo.Message
-	Guild   *discordgo.Guild
-	Channel *discordgo.Channel
+	Guild   *dstate.GuildState
+	Channel *dstate.ChannelState
+	State   *dstate.State
 
 	ctx context.Context
 }
@@ -300,7 +314,7 @@ func (e *ExecData) Context() context.Context {
 	return e.ctx
 }
 
-// WithContext Returns a copy of execdata with the context
+// WithContext Returns a copy of execdata with the context similar to net/http.Request.WithContext
 func (e *ExecData) WithContext(ctx context.Context) *ExecData {
 	ne := new(ExecData)
 	*ne = *e
