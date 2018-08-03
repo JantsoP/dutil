@@ -183,11 +183,22 @@ func (m *MemberState) DGoCopy() *discordgo.Member {
 }
 
 func (m *MemberState) DGoUser() *discordgo.User {
-	return &discordgo.User{
+	user := &discordgo.User{
 		ID:            m.ID,
 		Username:      m.Username,
 		Bot:           m.Bot,
 		Avatar:        m.StrAvatar(),
 		Discriminator: strconv.FormatInt(int64(m.Discriminator), 10),
 	}
+
+	// Pad the discrim
+	if m.Discriminator < 10 {
+		user.Discriminator = "000" + user.Discriminator
+	} else if m.Discriminator < 100 {
+		user.Discriminator = "00" + user.Discriminator
+	} else if m.Discriminator < 1000 {
+		user.Discriminator = "0" + user.Discriminator
+	}
+
+	return user
 }
