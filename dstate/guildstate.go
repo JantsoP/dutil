@@ -246,6 +246,11 @@ func (g *GuildState) PresenceAddUpdate(lock bool, newPresence *discordgo.Presenc
 	if ok {
 		existing.UpdatePresence(newPresence)
 	} else {
+		if newPresence.Status == discordgo.StatusOffline {
+			// Don't bother if this is the case, most likely just removed from the server and the state would be very incomplete
+			return
+		}
+
 		ms := &MemberState{
 			Guild: g,
 			ID:    newPresence.User.ID,
