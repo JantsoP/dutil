@@ -3,14 +3,14 @@ package dutil
 // Package dutil provides general discordgo utilities that i find to be reusing across my discord projects
 
 import (
-	"github.com/jonas747/discordgo"
+	"github.com/bwmarrin/discordgo"
 	"strings"
 )
 
 // Returns all guild members in a guild
 // It will make `number of members`/1000 requests to the api
-func GetAllGuildMembers(session *discordgo.Session, guilID int64) ([]*discordgo.Member, error) {
-	var after int64
+func GetAllGuildMembers(session *discordgo.Session, guilID string) ([]*discordgo.Member, error) {
+	var after string
 	members := make([]*discordgo.Member, 0)
 
 	for {

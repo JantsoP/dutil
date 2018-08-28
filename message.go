@@ -2,14 +2,14 @@ package dutil
 
 import (
 	"context"
-	"github.com/jonas747/discordgo"
+	"github.com/bwmarrin/discordgo"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
 
 // See SplitSendMessageCtx
-func SplitSendMessage(s *discordgo.Session, channelID int64, message string) ([]*discordgo.Message, error) {
+func SplitSendMessage(s *discordgo.Session, channelID string, message string) ([]*discordgo.Message, error) {
 	return SplitSendMessageCtx(s, context.Background(), channelID, message)
 }
 
@@ -17,12 +17,12 @@ func SplitSendMessage(s *discordgo.Session, channelID int64, message string) ([]
 // If the message is longer than 2k characters it will split at
 // Last newline before 2k or last whitespace before 2k or if that fails
 // (no whitespace) just split at 2k
-func SplitSendMessageCtx(s *discordgo.Session, ctx context.Context, channelID int64, message string) ([]*discordgo.Message, error) {
+func SplitSendMessageCtx(s *discordgo.Session, ctx context.Context, channelID string, message string) ([]*discordgo.Message, error) {
 	return SplitSendMessagePSCtx(s, ctx, channelID, message, "", "", false, false)
 }
 
 // See SplitSendMessagePSCtx
-func SplitSendMessagePS(s *discordgo.Session, channelID int64, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
+func SplitSendMessagePS(s *discordgo.Session, channelID string, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
 	return SplitSendMessagePSCtx(s, context.Background(), channelID, message, prefix, suffix, prefixStart, suffixEnd)
 }
 
@@ -34,7 +34,7 @@ func SplitSendMessagePS(s *discordgo.Session, channelID int64, message string, p
 // Prefix is not not added to the first one if prefixStart is false
 // Suffix is added to the end of each message, and not the last message if suffixend is false
 // Cancel the context to stop this process
-func SplitSendMessagePSCtx(s *discordgo.Session, ctx context.Context, channelID int64, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
+func SplitSendMessagePSCtx(s *discordgo.Session, ctx context.Context, channelID string, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
 	rest := message
 	first := true
 
