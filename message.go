@@ -2,18 +2,19 @@ package dutil
 
 import (
 	"context"
-	"github.com/jonas747/discordgo"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/jonas747/discordgo"
 )
 
-// See SplitSendMessageCtx
+// SplitSendMessage see SplitSendMessageCtx
 func SplitSendMessage(s *discordgo.Session, channelID int64, message string) ([]*discordgo.Message, error) {
 	return SplitSendMessageCtx(s, context.Background(), channelID, message)
 }
 
-// A helper for sending potentially long messages
+// SplitSendMessageCtx is a helper for sending potentially long messages
 // If the message is longer than 2k characters it will split at
 // Last newline before 2k or last whitespace before 2k or if that fails
 // (no whitespace) just split at 2k
@@ -21,12 +22,12 @@ func SplitSendMessageCtx(s *discordgo.Session, ctx context.Context, channelID in
 	return SplitSendMessagePSCtx(s, ctx, channelID, message, "", "", false, false)
 }
 
-// See SplitSendMessagePSCtx
+// SplitSendMessagePS see SplitSendMessagePSCtx
 func SplitSendMessagePS(s *discordgo.Session, channelID int64, message string, prefix, suffix string, prefixStart, suffixEnd bool) ([]*discordgo.Message, error) {
 	return SplitSendMessagePSCtx(s, context.Background(), channelID, message, prefix, suffix, prefixStart, suffixEnd)
 }
 
-// A helper for sending potentially long messages
+// SplitSendMessagePSCtx is a helper for sending potentially long messages
 // If the message is longer than 2k characters it will split at
 // Last newline before 2k or last whitespace before 2k or if that fails
 // (no whitespace) just split at 2k
