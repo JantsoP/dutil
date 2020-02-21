@@ -3,6 +3,7 @@ package dutil
 // Package dutil provides general discordgo utilities that i find to be reusing across my discord projects
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/jonas747/discordgo"
@@ -74,10 +75,32 @@ func (r Roles) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
+const zeroWidthSpace = "​"
+
+var (
+	everyoneReplacer    = strings.NewReplacer("@everyone", "@"+zeroWidthSpace+"everyone")
+	hereReplacer        = strings.NewReplacer("@here", "@"+zeroWidthSpace+"here")
+	patternRoleMentions = regexp.MustCompile("<@&[0-9]*>")
+)
+
 // EscapeEveryoneMention Escapes an everyone mention, adding a zero width space between the '@' and rest
 func EscapeEveryoneMention(in string) string {
 	const zeroSpace = "​" // <- Zero width space
-	s := strings.Replace(in, "@everyone", "@"+zeroSpace+"everyone", -1)
-	s = strings.Replace(s, "@here", "@"+zeroSpace+"here", -1)
+	s := everyoneReplacer.Replace(in)
+	s = hereReplacer.Replace(s)
 	return s
+}
+
+// EscapeSpecialMentions Escapes an everyone mention, adding a zero width space between the '@' and rest, also escapes role mentions
+func EscapeSpecialMentions(s string) string {
+	s = EscapeEveryoneMention(s)
+
+	return patternRoleMentions.ReplaceAllStringFunc(s, func(x string) string {
+		if len(x) < 4 {
+			return x
+		}
+
+		// Not allowed
+		return x[:2] + zeroWidthSpace + x[2:]
+	})
 }
